@@ -1,0 +1,334 @@
+// ============================================
+// CoH1 × Mistral AI Mod - Game State Collector
+// ============================================
+//
+// Collects comprehensive game state data for AI decision making.
+//
+// Author: Generated via planner skill
+// Version: 0.1.0
+// Date: 2026-10-04
+//
+
+// ============================================
+// Game State Data Structure
+// ============================================
+
+// Main game state object structure:
+// {
+//   "player_id": "integer",
+//   "timestamp": "float",
+//   "resources": {
+//     "manpower": {"current": 0, "income": 0, "max": 0},
+//     "fuel": {"current": 0, "income": 0, "max": 0},
+//     "munitions": {"current": 0, "income": 0, "max": 0}
+//   },
+//   "squads": [
+//     {
+//       "id": "integer",
+//       "type": "string",
+//       "health": "float",  // 0.0 - 1.0
+//       "max_health": "float",
+//       "vet_level": "integer",  // 0-5
+//       "position": {"x": "float", "y": "float", "z": "float"},
+//       "posture": "string",  // "aggressive", "defensive", "retreat"
+//       "target": "integer or null",
+//       "weapon_cooldown": "float",
+//       "in_combat": "boolean",
+//       "under_fire": "boolean",
+//       "suppressed": "boolean",
+//       "pinned": "boolean"
+//     }
+//   ],
+//   "capture_points": [
+//     {
+//       "id": "integer",
+//       "position": {"x": "float", "y": "float", "z": "float"},
+//       "owner": "integer or null",  // player_id or null
+//       "capture_progress": "float",  // 0.0 - 1.0
+//       "is_neutral": "boolean"
+//     }
+//   ],
+//   "visible_enemies": [
+//     {
+//       "id": "integer",
+//       "type": "string",
+//       "health": "float",
+//       "position": {"x": "float", "y": "float", "z": "float"},
+//       "posture": "string",
+//       "distance": "float",
+//       "in_combat": "boolean"
+//     }
+//   ],
+//   "tech_tree": {
+//     "tier_1": {"unlocked": "boolean", "progress": "float"},
+//     "tier_2": {"unlocked": "boolean", "progress": "float"},
+//     "tier_3": {"unlocked": "boolean", "progress": "float"},
+//     "abilities": ["string"]
+//   },
+//   "build_queue": [
+//     {
+//       "type": "string",  // "unit", "building", "ability"
+//       "name": "string",
+//       "progress": "float",  // 0.0 - 1.0
+//       "estimated_time": "float",
+//       "cost": {"manpower": "integer", "fuel": "integer", "munitions": "integer"}
+//     }
+//   ],
+//   "population": {
+//     "current": "integer",
+//     "max": "integer"
+//   },
+//   "game_time": "float",
+//   "game_phase": "string"  // "early", "mid", "late"
+// }
+
+// ============================================
+// Resource Collection
+// ============================================
+
+function CollectResources()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    // Need to access game data structures
+    return {
+        "manpower": {"current": 0, "income": 0, "max": 1000},
+        "fuel": {"current": 0, "income": 0, "max": 1000},
+        "munitions": {"current": 0, "income": 0, "max": 1000}
+    }
+}
+
+// ============================================
+// Squad Collection
+// ============================================
+
+function CollectSquads()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    // Need to iterate through player's squads
+    return []
+}
+
+function CollectSquadData(squadId)
+{
+    // Collect detailed data for a single squad
+    return {
+        "id": squadId,
+        "type": "unknown",
+        "health": 1.0,
+        "max_health": 1.0,
+        "vet_level": 0,
+        "position": {"x": 0, "y": 0, "z": 0},
+        "posture": "defensive",
+        "target": null,
+        "weapon_cooldown": 0,
+        "in_combat": false,
+        "under_fire": false,
+        "suppressed": false,
+        "pinned": false
+    }
+}
+
+// ============================================
+// Capture Point Collection
+// ============================================
+
+function CollectCapturePoints()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return []
+}
+
+function CollectCapturePointData(cpId)
+{
+    return {
+        "id": cpId,
+        "position": {"x": 0, "y": 0, "z": 0},
+        "owner": null,
+        "capture_progress": 0.0,
+        "is_neutral": true
+    }
+}
+
+// ============================================
+// Enemy Unit Collection
+// ============================================
+
+function CollectVisibleEnemies()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return []
+}
+
+function CollectEnemyData(enemyId)
+{
+    return {
+        "id": enemyId,
+        "type": "unknown",
+        "health": 1.0,
+        "position": {"x": 0, "y": 0, "z": 0},
+        "posture": "aggressive",
+        "distance": 0,
+        "in_combat": false
+    }
+}
+
+// ============================================
+// Tech Tree Collection
+// ============================================
+
+function CollectTechTree()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return {
+        "tier_1": {"unlocked": false, "progress": 0.0},
+        "tier_2": {"unlocked": false, "progress": 0.0},
+        "tier_3": {"unlocked": false, "progress": 0.0},
+        "abilities": []
+    }
+}
+
+// ============================================
+// Build Queue Collection
+// ============================================
+
+function CollectBuildQueue()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return []
+}
+
+function CollectBuildQueueItem(item)
+{
+    return {
+        "type": "unit",
+        "name": "unknown",
+        "progress": 0.0,
+        "estimated_time": 0,
+        "cost": {"manpower": 0, "fuel": 0, "munitions": 0}
+    }
+}
+
+// ============================================
+// Population Collection
+// ============================================
+
+function CollectPopulation()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return {
+        "current": 0,
+        "max": 100
+    }
+}
+
+// ============================================
+// Game Time and Phase
+// ============================================
+
+function CollectGameTime()
+{
+    // Placeholder - implementation depends on SCAR capabilities
+    return 0.0
+}
+
+function DetermineGamePhase(gameTime)
+{
+    if (gameTime < 300) {  // First 5 minutes
+        return "early"
+    } else if (gameTime < 900) {  // Next 10 minutes
+        return "mid"
+    } else {
+        return "late"
+    }
+}
+
+// ============================================
+// Main State Collection Function
+// ============================================
+
+function CollectGameState()
+{
+    local state = {}
+    
+    // Collect all data
+    state.resources = CollectResources()
+    state.squads = CollectSquads()
+    state.capture_points = CollectCapturePoints()
+    state.visible_enemies = CollectVisibleEnemies()
+    state.tech_tree = CollectTechTree()
+    state.build_queue = CollectBuildQueue()
+    state.population = CollectPopulation()
+    
+    // Add metadata
+    state.game_time = CollectGameTime()
+    state.game_phase = DetermineGamePhase(state.game_time)
+    
+    // Filter out invalid data
+    state = FilterInvalidData(state)
+    
+    return state
+}
+
+// ============================================
+// Data Validation and Filtering
+// ============================================
+
+function FilterInvalidData(state)
+{
+    // Remove null/undefined values
+    // Normalize data types
+    // Handle edge cases
+    return state
+}
+
+// ============================================
+// Performance Optimization
+// ============================================
+
+// Cache for expensive operations
+local stateCache = null
+local lastCollectionTime = 0
+
+function GetCachedState(maxAge)
+{
+    local currentTime = GetTimestamp()
+    
+    if (stateCache != null && (currentTime - lastCollectionTime) < maxAge) {
+        return stateCache
+    }
+    
+    stateCache = CollectGameState()
+    lastCollectionTime = currentTime
+    return stateCache
+}
+
+// ============================================
+// Delta State Collection (for performance)
+// ============================================
+
+function CollectDeltaState()
+{
+    // Only collect changes since last state
+    // More efficient for frequent updates
+    return CollectGameState()  // Full collection for now
+}
+
+// ============================================
+// Initialization
+// ============================================
+
+function InitializeStateCollector()
+{
+    Log("Initializing state collector")
+    
+    // Test data collection
+    local testState = CollectGameState()
+    
+    if (testState == null || testState == {}) {
+        Log("WARNING: State collection returned empty data")
+        return false
+    }
+    
+    Log("State collector initialized successfully")
+    return true
+}
