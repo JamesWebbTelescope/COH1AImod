@@ -1,0 +1,96 @@
+CoH1 × Mistral AI Mod — Architecture Plan
+1. Goals & Non-Goals
+Goals
+
+Replace macro-level decision-making (strategy, build order, tech, posture) of the stock CoH1 skirmish AI with a Mistral model.
+Keep the game running smoothly despite cloud latency and API costs.
+Degrade gracefully: if the model is unreachable, the AI falls back to stock/heuristic behavior rather than sitting idle.
+Non-goals
+
+Replacing micro-level unit pathfinding or weapon aiming (engine-internal, not scriptable).
+Multiplayer use against human players — target skirmish/custom games vs. AI, or AI as an ally.
+Training a custom model in v1; use Mistral API prompting first, evaluate fine-tuning later.
+2. High-Level Architecture
+┌─────────────────────────── CoH1 process ───────────────────────────┐
+│  SCAR/Lua mod scripts (the "Agent" layer)                          │
+│   • State collector: units, resources, map control, enemy intel     │
+│   • Command executor: translates action intents into game commands │
+│   • Local reflex layer: cheap, high-frequency heuristics           │
+└──────────────┬─────────────────────────────────────────────────────┘
+               │ IPC channel (Phase 0 spike decides: file polling
+               │ vs. shared memory vs. console-log relay)
+┌──────────────▼─────────────────────────────────────────────────────┐
+│  Bridge / Orchestrator (local service, e.g. Python)                 │
+│   • Game-state serializer → compact JSON snapshot                   │
+│   • Tick scheduler: "strategist" every ~10–15s, reflexes every tick│
+│   • Rate limiting, retries, cost budget for API calls               │
+└──────┬───────────────────────────────┬─────────────────────────────┘
+       │                               │
+┌──────▼───────────────┐   ┌───────────▼─────────────────────────────┐
+│  Mistral Strategist  │   │  Action Validator & Safety Filter        │
+│  (API, e.g. Mistral  │   │  • Whitelist of legal commands           │
+│  Large / Small)      │   │  • Sanity checks (resources, pop cap,   │
+│  Returns macro intents│  │    pathfinding, legality)                │
+└──────────────────────┘   └───────────┬─────────────────────────────┘
+                                       │ validated intents
+                                       ▼
+                            back through IPC → SCAR executor
+3. Component Breakdown
+A. In-game SCAR layer (ships inside the mod .sga)
+
+Injected via the mod's module/map SCAR so it runs in every skirmish.
+State collector: every tick (~1s), gathers per-player snapshot — manpower/fuel/munitions income and stock, squad list (type, health, vet, position), capture points owned, visible enemy units, tech tree state, current build queue.
+Command executor: exposes a small command API to the bridge — e.g. BUILD(engineer, tier2), CAPTURE(point), ATTACK_MOVE(squad, location), SET_POSTURE(defend), PRODUCE(unit_type). SCAR has the functions needed to issue these (squad commands, production, building placement via pre-approved spots).
+Local reflex layer: things that must never wait for the cloud — retreat low-health squads under fire, respond to artillery, basic capture micro, keep build queues non-empty using the last strategist directive.
+B. IPC bridge (critical risk item)
+
+SCAR cannot open sockets, so the channel is one of: (a) SCAR file I/O polled by the local service — simplest if writable at runtime; (b) a companion process reading/writing game process memory — robust but complex; (c) console/log relay.
+Phase 0 of the roadmap is a spike proving this channel works, because everything else depends on it. Latency target: state out + command in under ~200ms.
+C. Orchestrator (local service, Python recommended)
+
+Two clocks:
+Strategic tick (10–15s): snapshot → strategist prompt → validated intents back.
+Fast tick (≤1s): relay reflex-layer needs and urgent events (base under attack) — may trigger an immediate strategic call outside the cadence, budget permitting.
+Maintains game history (a rolling log of last N snapshots and decisions) so the strategist gets continuity.
+Cost/rate limiter: max N strategist calls per match; urgent calls draw from the same budget.
+D. Mistral strategist
+
+Receives a compact, schema'd snapshot + recent history + doctrine prompt (faction matchup, map, difficulty).
+Returns structured macro intents (JSON, e.g. via JSON mode): tech decisions, build order priorities, production mix, posture (attack/hold/harass), focus area on the map, retreat thresholds.
+Prompted as a military tactician with CoH1 domain knowledge; a system prompt encodes hard rules (fuel cutoffs, counter-units matrix).
+Never returns raw micro commands — only intents the validator can check.
+E. Action validator & safety filter
+
+Whitelist enforcement: only commands in the executor's API are legal.
+Sanity checks: can the player actually afford/build this? Is the target location valid? Pop cap respected?
+If an intent fails validation → discard and keep previous directive. Log all decisions for replay analysis.
+4. Data Flow (one strategic cycle)
+SCAR collector writes snapshot at t=0.
+Orchestrator reads it, serializes to compact JSON, builds prompt with history.
+Mistral call (~1–3s) → intents JSON.
+Validator checks intents against the same snapshot's legality rules.
+Validated intents go to SCAR executor; reflex layer uses them until the next cycle.
+Everything logged for post-match analysis.
+5. Key Design Decisions to Make
+Decision	Options	Recommendation
+Mistral model tier	One model for all calls vs. Large for strategy, Small for urgent tactical calls	Start with one mid-tier model; add tiering if latency hurts
+Difficulty tuning	Doctrine prompts per difficulty	Yes — it's the cheapest difficulty dial
+Human vs. AI opponents	AI vs. AI only, or replace ally AI too	Support both via per-player assignment
+Fine-tuning	Prompt-only vs. fine-tuned model	Prompt-only for v1; revisit after the eval harness exists
+6. Testing & Evaluation
+Harness first: run AI-vs-AI matches headless/automated on fixed maps and matchups; record win rate vs. stock AI at each difficulty.
+Metrics: win rate, resource efficiency, time-to-tech, capture-point uptime, decision log review for "why did it do that" explainability.
+Regression suite: a fixed set of replay scenarios (e.g., "respond to early bike rush") to catch strategist regressions.
+7. Risks
+IPC feasibility in CoH1 SCAR — highest risk; that's why it's the Phase 0 spike. If file I/O fails and memory IPC proves too brittle, fallback is a heavier external game-state reader (process memory scanning), which changes scope.
+Latency vs. game speed — mitigated by the two-tier design; the reflex layer must be genuinely autonomous.
+API cost per match — mitigated by the call budget; a full match should aim for ~100–200 strategist calls max.
+Mistral output validity — mitigated by JSON mode + strict validation + fallback to last directive.
+Multiplayer/anti-cheat — this mod touches process memory or file I/O at runtime, so it's single-player/skirmish-only by design; state that clearly up front.
+8. Roadmap
+Phase 0 — Spike: empty mod loads in CoH1; prove SCAR can run in skirmish; prove the IPC round-trip. Exit criterion: state leaves the game and a command returns in <200ms.
+Phase 1 — Read-only intelligence: full snapshot pipeline + logging; stock AI untouched. Exit: post-match analysis of what the AI "saw."
+Phase 2 — Reflex layer: local heuristics replace part of the stock AI decision loop without any model calls.
+Phase 3 — Strategist integration: Mistral macro intents driving build/tech/posture through the validator.
+Phase 4 — Eval harness & tuning: AI-vs-AI win-rate measurement, difficulty doctrine prompts, iteration.
+Phase 5 — Polish: config UI (API key, model choice, budget), docs, release packaging.
