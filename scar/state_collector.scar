@@ -3,11 +3,14 @@
 // ============================================
 //
 // Collects comprehensive game state data for AI decision making.
+// Uses SCAR ebx: API for direct game data access.
 //
 // Author: Generated via planner skill
-// Version: 0.1.0
+// Version: 0.2.0
 // Date: 2026-10-04
 //
+// Documentation: https://scardoc.coh.fi/
+// ============================================
 
 // ============================================
 // Game State Data Structure
@@ -15,8 +18,11 @@
 
 // Main game state object structure:
 // {
+//   "version": "string",
 //   "player_id": "integer",
 //   "timestamp": "float",
+//   "game_time": "float",
+//   "game_phase": "string",  // "early", "mid", "late"
 //   "resources": {
 //     "manpower": {"current": 0, "income": 0, "max": 0},
 //     "fuel": {"current": 0, "income": 0, "max": 0},
@@ -30,9 +36,8 @@
 //       "max_health": "float",
 //       "vet_level": "integer",  // 0-5
 //       "position": {"x": "float", "y": "float", "z": "float"},
-//       "posture": "string",  // "aggressive", "defensive", "retreat"
+//       "posture": "string",  // "aggressive", "defensive", "retreat", "hold"
 //       "target": "integer or null",
-//       "weapon_cooldown": "float",
 //       "in_combat": "boolean",
 //       "under_fire": "boolean",
 //       "suppressed": "boolean",
@@ -60,9 +65,12 @@
 //     }
 //   ],
 //   "tech_tree": {
-//     "tier_1": {"unlocked": "boolean", "progress": "float"},
-//     "tier_2": {"unlocked": "boolean", "progress": "float"},
-//     "tier_3": {"unlocked": "boolean", "progress": "float"},
+//     "tier_1": "boolean",  // unlocked
+//     "tier_2": "boolean",
+//     "tier_3": "boolean",
+//     "t1_progress": "float",  // 0.0 - 1.0
+//     "t2_progress": "float",
+//     "t3_progress": "float",
 //     "abilities": ["string"]
 //   },
 //   "build_queue": [
@@ -70,17 +78,55 @@
 //       "type": "string",  // "unit", "building", "ability"
 //       "name": "string",
 //       "progress": "float",  // 0.0 - 1.0
-//       "estimated_time": "float",
-//       "cost": {"manpower": "integer", "fuel": "integer", "munitions": "integer"}
+//       "time": "float",  // estimated time remaining
+//       "cost": [manpower, fuel, munitions]
 //     }
 //   ],
-//   "population": {
-//     "current": "integer",
-//     "max": "integer"
-//   },
-//   "game_time": "float",
-//   "game_phase": "string"  // "early", "mid", "late"
+//   "pop": [current, max],
+//   "faction": "string"  // "allies" or "axis"
 // }
+
+// ============================================
+// Global References
+// ============================================
+
+// Cache the local player reference for performance
+local localPlayer = null
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function GetLocalPlayer()
+{
+    if (localPlayer == null) {
+        localPlayer = ebx:Game.GetLocalPlayer()
+    }
+    return localPlayer
+}
+
+function IsValidPlayer(player)
+{
+    return player != null && player:IsValid()
+}
+
+function SafeCall(func, defaultValue)
+{
+    if (func == null) return defaultValue
+    
+    local success, result = pcall(func)
+    if (success) {
+        return result
+    } else {
+        Log("WARNING: SafeCall failed: " .. tostring(result))
+        return defaultValue
+    }
+}
+
+function GetTimestamp()
+{
+    return ebx:Game.GetGameTime()
+}
 
 // ============================================
 // Resource Collection
@@ -88,88 +134,299 @@
 
 function CollectResources()
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    // Need to access game data structures
-    return {
-        "manpower": {"current": 0, "income": 0, "max": 1000},
-        "fuel": {"current": 0, "income": 0, "max": 1000},
-        "munitions": {"current": 0, "income": 0, "max": 1000}
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect resources - invalid local player")
+        return {
+            "manpower": {"current": 0, "income": 0, "max": 1000},
+            "fuel": {"current": 0, "income": 0, "max": 800},
+            "munitions": {"current": 0, "income": 0, "max": 600}
+        }
     }
+    
+    local resources = {}
+    
+    // Get manpower
+    local mp = player:GetManpower()
+    resources.manpower = {
+        current = mp:GetCurrent(),
+        income = mp:GetIncome(),
+        max = mp:GetMax()
+    }
+    
+    // Get fuel
+    local fuel = player:GetFuel()
+    resources.fuel = {
+        current = fuel:GetCurrent(),
+        income = fuel:GetIncome(),
+        max = fuel:GetMax()
+    }
+    
+    // Get munitions
+    local muni = player:GetMunitions()
+    resources.munitions = {
+        current = muni:GetCurrent(),
+        income = muni:GetIncome(),
+        max = muni:GetMax()
+    }
+    
+    return resources
 }
 
 // ============================================
 // Squad Collection
 // ============================================
 
-function CollectSquads()
-{
-    // Placeholder - implementation depends on SCAR capabilities
-    // Need to iterate through player's squads
-    return []
+// Squad type mapping from internal names to standardized names
+local squadTypeMap = {
+    -- Allies
+    ["soldier_rifle"] = "riflemen",
+    ["soldier_engineer"] = "engineer",
+    ["soldier_sniper"] = "sniper",
+    ["soldier_mg"] = "machine_gun",
+    ["soldier_mortar"] = "mortar",
+    ["soldier_bazooka"] = "bazooka",
+    ["soldier_grenadier"] = "grenadier",
+    ["vehicle_jeep"] = "scout_car",
+    ["vehicle_halftrack"] = "halftrack",
+    ["vehicle_light_tank"] = "light_tank",
+    ["vehicle_medium_tank"] = "medium_tank",
+    ["vehicle_heavy_tank"] = "heavy_tank",
+    -- Axis (similar mapping)
+    ["soldier_volks"] = "riflemen",
+    ["soldier_pioneer"] = "engineer",
+    ["soldier_sniper_axis"] = "sniper",
+    ["soldier_hmg"] = "machine_gun",
+    ["soldier_mortar_axis"] = "mortar",
+    ["soldier_panzerschreck"] = "bazooka",
+    ["soldier_grenadier_axis"] = "grenadier"
 }
 
-function CollectSquadData(squadId)
+function GetStandardSquadType(squad)
 {
-    // Collect detailed data for a single squad
-    return {
-        "id": squadId,
-        "type": "unknown",
-        "health": 1.0,
-        "max_health": 1.0,
-        "vet_level": 0,
-        "position": {"x": 0, "y": 0, "z": 0},
-        "posture": "defensive",
-        "target": null,
-        "weapon_cooldown": 0,
-        "in_combat": false,
-        "under_fire": false,
-        "suppressed": false,
-        "pinned": false
+    local internalType = squad:GetType()
+    local standardType = squadTypeMap[internalType]
+    
+    if (standardType == null) {
+        // Return the internal type as fallback
+        return internalType or "unknown"
     }
+    return standardType
+}
+
+function GetSquadPosture(squad)
+{
+    local posture = squad:GetPosture()
+    if (posture == "aggressive") return "aggressive"
+    if (posture == "defensive") return "defensive"
+    if (posture == "retreat") return "retreat"
+    return "hold"
+}
+
+function CollectSquadData(squad)
+{
+    if (squad == null || !squad:IsValid()) {
+        return null
+    }
+    
+    local squadData = {}
+    
+    squadData.id = squad:GetId()
+    squadData.type = GetStandardSquadType(squad)
+    
+    // Health information
+    local health = squad:GetHealth()
+    squadData.health = health.current or 0
+    squadData.max_health = health.max or 1
+    
+    // If health is 0, avoid division by zero
+    if (squadData.max_health <= 0) {
+        squadData.max_health = 1
+    }
+    
+    // Vet level
+    squadData.vet_level = squad:GetVeterancy() or 0
+    
+    // Position
+    local pos = squad:GetPosition()
+    if (pos ~= null) {
+        squadData.pos = {pos.x, pos.y, pos.z}
+    } else {
+        squadData.pos = {0, 0, 0}
+    }
+    
+    // Posture
+    squadData.posture = GetSquadPosture(squad)
+    
+    // Target
+    local target = squad:GetTarget()
+    squadData.target = (target ~= null) and target:GetId() or null
+    
+    // Combat status
+    squadData.in_combat = squad:InCombat() or false
+    squadData.under_fire = squad:UnderFire() or false
+    squadData.suppressed = squad:IsSuppressed() or false
+    squadData.pinned = squad:IsPinned() or false
+    
+    return squadData
+}
+
+function CollectSquads()
+{
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect squads - invalid local player")
+        return {}
+    }
+    
+    local squads = player:GetSquads()
+    local squadList = {}
+    
+    if (squads ~= null) {
+        for i = 1, #squads do
+            local squad = squads[i]
+            local squadData = CollectSquadData(squad)
+            if (squadData ~= null) {
+                table.insert(squadList, squadData)
+            }
+        end
+    }
+    
+    return squadList
 }
 
 // ============================================
 // Capture Point Collection
 // ============================================
 
-function CollectCapturePoints()
+function CollectCapturePointData(cp)
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return []
+    if (cp == null || !cp:IsValid()) {
+        return null
+    }
+    
+    local cpData = {}
+    cpData.id = cp:GetId()
+    
+    local pos = cp:GetPosition()
+    if (pos ~= null) {
+        cpData.pos = {pos.x, pos.y, pos.z}
+    } else {
+        cpData.pos = {0, 0, 0}
+    }
+    
+    // Owner (can be null if neutral or contested)
+    local owner = cp:GetOwner()
+    cpData.owner = (owner ~= null) and owner:GetId() or null
+    
+    // Capture progress
+    cpData.capture_progress = cp:GetCaptureProgress() or 0
+    
+    // Neutral status
+    cpData.is_neutral = (cpData.owner == null)
+    
+    return cpData
 }
 
-function CollectCapturePointData(cpId)
+function CollectCapturePoints()
 {
-    return {
-        "id": cpId,
-        "position": {"x": 0, "y": 0, "z": 0},
-        "owner": null,
-        "capture_progress": 0.0,
-        "is_neutral": true
+    local map = ebx:Game.GetMap()
+    if (map == null) {
+        Log("ERROR: Cannot get map for capture points")
+        return {}
     }
+    
+    local cps = map:GetCapturePoints()
+    local cpList = {}
+    
+    if (cps ~= null) {
+        for i = 1, #cps do
+            local cp = cps[i]
+            local cpData = CollectCapturePointData(cp)
+            if (cpData ~= null) {
+                table.insert(cpList, cpData)
+            }
+        end
+    }
+    
+    return cpList
 }
 
 // ============================================
 // Enemy Unit Collection
 // ============================================
 
-function CollectVisibleEnemies()
+function CollectEnemyData(enemySquad)
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return []
+    if (enemySquad == null || !enemySquad:IsValid()) {
+        return null
+    }
+    
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) {
+        return null
+    }
+    
+    local enemyData = {}
+    
+    enemyData.id = enemySquad:GetId()
+    enemyData.type = GetStandardSquadType(enemySquad)
+    
+    // Health
+    local health = enemySquad:GetHealth()
+    enemyData.health = (health.current or 0) / (health.max or 1)
+    
+    // Position
+    local pos = enemySquad:GetPosition()
+    if (pos ~= null) {
+        enemyData.pos = {pos.x, pos.y, pos.z}
+        
+        // Calculate distance from player's average position
+        local playerPos = player:GetAveragePosition()
+        if (playerPos ~= null) {
+            local dx = pos.x - playerPos.x
+            local dy = pos.y - playerPos.y
+            local dz = pos.z - playerPos.z
+            enemyData.distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+        } else {
+            enemyData.distance = 0
+        }
+    } else {
+        enemyData.pos = {0, 0, 0}
+        enemyData.distance = 0
+    }
+    
+    enemyData.posture = GetSquadPosture(enemySquad)
+    enemyData.in_combat = enemySquad:InCombat() or false
+    
+    return enemyData
 }
 
-function CollectEnemyData(enemyId)
+function CollectVisibleEnemies()
 {
-    return {
-        "id": enemyId,
-        "type": "unknown",
-        "health": 1.0,
-        "position": {"x": 0, "y": 0, "z": 0},
-        "posture": "aggressive",
-        "distance": 0,
-        "in_combat": false
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect visible enemies - invalid local player")
+        return {}
     }
+    
+    local enemies = player:GetVisibleEnemies()
+    local enemyList = {}
+    
+    if (enemies ~= null) {
+        for i = 1, #enemies do
+            local enemy = enemies[i]
+            local enemyData = CollectEnemyData(enemy)
+            if (enemyData ~= null) {
+                table.insert(enemyList, enemyData)
+            }
+        end
+    }
+    
+    return enemyList
 }
 
 // ============================================
@@ -178,34 +435,124 @@ function CollectEnemyData(enemyId)
 
 function CollectTechTree()
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return {
-        "tier_1": {"unlocked": false, "progress": 0.0},
-        "tier_2": {"unlocked": false, "progress": 0.0},
-        "tier_3": {"unlocked": false, "progress": 0.0},
-        "abilities": []
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect tech tree - invalid local player")
+        return {
+            tier_1 = false,
+            tier_2 = false,
+            tier_3 = false,
+            abilities = {},
+            t1_progress = 0,
+            t2_progress = 0,
+            t3_progress = 0
+        }
     }
+    
+    local techTree = player:GetTechTree()
+    local techData = {}
+    
+    if (techTree ~= null) {
+        techData.tier_1 = SafeCall(function() return techTree:IsTier1Unlocked() end, false)
+        techData.tier_2 = SafeCall(function() return techTree:IsTier2Unlocked() end, false)
+        techData.tier_3 = SafeCall(function() return techTree:IsTier3Unlocked() end, false)
+        
+        techData.t1_progress = SafeCall(function() return techTree:GetTier1Progress() end, 0)
+        techData.t2_progress = SafeCall(function() return techTree:GetTier2Progress() end, 0)
+        techData.t3_progress = SafeCall(function() return techTree:GetTier3Progress() end, 0)
+        
+        // Collect abilities
+        techData.abilities = {}
+        local abilities = SafeCall(function() return techTree:GetAbilities() end, {})
+        if (abilities ~= null) {
+            for i = 1, #abilities do
+                local ability = abilities[i]
+                if (ability ~= null) {
+                    table.insert(techData.abilities, ability:GetName() or "unknown")
+                }
+            end
+        }
+    } else {
+        // Fallback to default values
+        techData.tier_1 = false
+        techData.tier_2 = false
+        techData.tier_3 = false
+        techData.t1_progress = 0
+        techData.t2_progress = 0
+        techData.t3_progress = 0
+        techData.abilities = {}
+    }
+    
+    return techData
 }
 
 // ============================================
 // Build Queue Collection
 // ============================================
 
-function CollectBuildQueue()
+function CollectBuildQueueItem(queueItem)
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return []
+    if (queueItem == null) {
+        return null
+    }
+    
+    local itemData = {}
+    
+    // Item type
+    local itemType = queueItem:GetType()
+    if (itemType == "unit") {
+        itemData.type = "unit"
+    } elseif (itemType == "building") {
+        itemData.type = "building"
+    } elseif (itemType == "ability") {
+        itemData.type = "ability"
+    } else {
+        itemData.type = "unknown"
+    }
+    
+    itemData.name = queueItem:GetName() or "unknown"
+    itemData.progress = queueItem:GetProgress() or 0
+    itemData.time = queueItem:GetTimeRemaining() or 0
+    
+    // Cost
+    local cost = queueItem:GetCost()
+    if (cost ~= null) {
+        itemData.cost = {
+            cost.manpower or 0,
+            cost.fuel or 0,
+            cost.munitions or 0
+        }
+    } else {
+        itemData.cost = {0, 0, 0}
+    }
+    
+    return itemData
 }
 
-function CollectBuildQueueItem(item)
+function CollectBuildQueue()
 {
-    return {
-        "type": "unit",
-        "name": "unknown",
-        "progress": 0.0,
-        "estimated_time": 0,
-        "cost": {"manpower": 0, "fuel": 0, "munitions": 0}
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect build queue - invalid local player")
+        return {}
     }
+    
+    local queue = player:GetBuildQueue()
+    local queueList = {}
+    
+    if (queue ~= null) {
+        for i = 1, #queue do
+            local item = queue[i]
+            local itemData = CollectBuildQueueItem(item)
+            if (itemData ~= null) {
+                table.insert(queueList, itemData)
+            }
+        end
+    }
+    
+    return queueList
 }
 
 // ============================================
@@ -214,10 +561,18 @@ function CollectBuildQueueItem(item)
 
 function CollectPopulation()
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return {
-        "current": 0,
-        "max": 100
+    local player = GetLocalPlayer()
+    
+    if (!IsValidPlayer(player)) {
+        Log("ERROR: Cannot collect population - invalid local player")
+        return {0, 100}  // current, max
+    }
+    
+    local pop = player:GetPopulation()
+    if (pop ~= null) {
+        return {pop.current or 0, pop.max or 100}
+    } else {
+        return {0, 100}
     }
 }
 
@@ -227,19 +582,36 @@ function CollectPopulation()
 
 function CollectGameTime()
 {
-    // Placeholder - implementation depends on SCAR capabilities
-    return 0.0
+    return SafeCall(function() return ebx:Game.GetGameTime() end, 0)
 }
 
 function DetermineGamePhase(gameTime)
 {
     if (gameTime < 300) {  // First 5 minutes
         return "early"
-    } else if (gameTime < 900) {  // Next 10 minutes
+    } elseif (gameTime < 900) {  // Next 10 minutes
         return "mid"
     } else {
         return "late"
     }
+}
+
+// ============================================
+// Faction Detection
+// ============================================
+
+function GetFaction()
+{
+    local player = GetLocalPlayer()
+    
+    if (IsValidPlayer(player)) {
+        local faction = player:GetFaction()
+        if (faction ~= null) {
+            return string.lower(faction:GetName() or "allies")
+        }
+    }
+    
+    return "allies"  // Default
 }
 
 // ============================================
@@ -250,18 +622,22 @@ function CollectGameState()
 {
     local state = {}
     
+    // Add metadata
+    state.version = "1.0"
+    state.player = GetLocalPlayer():GetId() or 1
+    state.time = GetTimestamp()
+    
     // Collect all data
     state.resources = CollectResources()
     state.squads = CollectSquads()
-    state.capture_points = CollectCapturePoints()
-    state.visible_enemies = CollectVisibleEnemies()
-    state.tech_tree = CollectTechTree()
-    state.build_queue = CollectBuildQueue()
-    state.population = CollectPopulation()
-    
-    // Add metadata
+    state.cps = CollectCapturePoints()
+    state.enemies = CollectVisibleEnemies()
+    state.tech = CollectTechTree()
+    state.queue = CollectBuildQueue()
+    state.pop = CollectPopulation()
     state.game_time = CollectGameTime()
-    state.game_phase = DetermineGamePhase(state.game_time)
+    state.phase = DetermineGamePhase(state.game_time)
+    state.faction = GetFaction()
     
     // Filter out invalid data
     state = FilterInvalidData(state)
@@ -270,14 +646,76 @@ function CollectGameState()
 }
 
 // ============================================
+// JSON Serialization for IPC
+// ============================================
+
+function SerializeGameState(state)
+{
+    // Use SCAR's JSON encoder if available
+    if (json ~= null) {
+        return json.encode(state)
+    }
+    
+    // Fallback: simple serialization
+    Log("WARNING: JSON encoder not available, using basic serialization")
+    return "{}"  // Placeholder - in practice, use a proper JSON library
+}
+
+// ============================================
 // Data Validation and Filtering
 // ============================================
 
 function FilterInvalidData(state)
 {
-    // Remove null/undefined values
-    // Normalize data types
-    // Handle edge cases
+    if (state == null) {
+        return {}
+    }
+    
+    // Validate and sanitize each component
+    if (state.resources == null) {
+        state.resources = {
+            manpower = {current = 0, income = 0, max = 1000},
+            fuel = {current = 0, income = 0, max = 800},
+            munitions = {current = 0, income = 0, max = 600}
+        }
+    }
+    
+    if (state.squads == null) {
+        state.squads = {}
+    }
+    
+    if (state.cps == null) {
+        state.cps = {}
+    }
+    
+    if (state.enemies == null) {
+        state.enemies = {}
+    }
+    
+    if (state.tech == null) {
+        state.tech = {tier_1 = false, tier_2 = false, tier_3 = false, abilities = {}, t1_progress = 0, t2_progress = 0, t3_progress = 0}
+    }
+    
+    if (state.queue == null) {
+        state.queue = {}
+    }
+    
+    if (state.pop == null) {
+        state.pop = {0, 100}
+    }
+    
+    if (state.game_time == null) {
+        state.game_time = 0
+    }
+    
+    if (state.phase == null) {
+        state.phase = "early"
+    }
+    
+    if (state.faction == null) {
+        state.faction = "allies"
+    }
+    
     return state
 }
 
@@ -293,7 +731,7 @@ function GetCachedState(maxAge)
 {
     local currentTime = GetTimestamp()
     
-    if (stateCache != null && (currentTime - lastCollectionTime) < maxAge) {
+    if (stateCache ~= null && (currentTime - lastCollectionTime) < (maxAge or 1.0)) {
         return stateCache
     }
     
@@ -308,9 +746,9 @@ function GetCachedState(maxAge)
 
 function CollectDeltaState()
 {
-    // Only collect changes since last state
-    // More efficient for frequent updates
-    return CollectGameState()  // Full collection for now
+    // For now, collect full state
+    // In future, implement incremental updates
+    return CollectGameState()
 }
 
 // ============================================
@@ -331,4 +769,33 @@ function InitializeStateCollector()
     
     Log("State collector initialized successfully")
     return true
+}
+
+// ============================================
+// Periodic State Collection
+// ============================================
+
+local collectionInterval = 1.0  // Seconds between collections
+local lastCollectionTick = 0
+
+function UpdateStateCollector(deltaTime)
+{
+    lastCollectionTick = lastCollectionTick + deltaTime
+    
+    if (lastCollectionTick >= collectionInterval) {
+        lastCollectionTick = 0
+        local state = CollectGameState()
+        
+        // In a real implementation, this would write to IPC file
+        // For now, just collect and validate
+        if (state ~= null) {
+            // Log summary
+            Log(string.format("State collected: %d squads, %d CPs, %d enemies",
+                #state.squads, #state.cps, #state.enemies))
+        }
+        
+        return state
+    }
+    
+    return null
 }

@@ -1,0 +1,490 @@
+// ============================================
+// CoH1 × Mistral AI Mod - Main SCAR Entry Point
+// ============================================
+//
+// Main SCAR script that loads in CoH1 and manages the AI mod.
+// This is the entry point that SCAR will execute.
+//
+// Author: Generated via planner skill
+// Version: 0.2.0
+// Date: 2026-10-04
+//
+// Documentation: https://scardoc.coh.fi/
+// ============================================
+
+// ============================================
+// Mod Information
+// ============================================
+
+constant MOD_NAME = "CoH1 Mistral AI Mod"
+constant MOD_VERSION = "0.2.0"
+constant MOD_AUTHOR = "Generated via planner skill"
+
+// ============================================
+// Configuration
+// ============================================
+
+// Include configuration constants
+include("scar/config.scar")
+
+// Update intervals (seconds)
+constant STATE_COLLECTION_INTERVAL = 1.0
+constant COMMAND_PROCESSING_INTERVAL = 0.1
+constant IPC_UPDATE_INTERVAL = 0.05
+
+// ============================================
+// Module Includes
+// ============================================
+
+-- Include all required modules
+include("scar/state_collector.scar")
+include("scar/ipc.scar")
+
+// ============================================
+// Global State
+// ============================================
+
+-- Mod state
+local modInitialized = false
+local modEnabled = true
+local inTestMode = false
+local inDebugMode = false
+
+-- Timing
+local lastUpdateTime = 0
+local lastStateCollectionTime = 0
+local lastCommandProcessingTime = 0
+
+-- Statistics
+local stats = {
+    states_collected = 0,
+    commands_processed = 0,
+    errors = 0,
+    last_state_time = 0,
+    last_command_time = 0
+}
+
+// ============================================
+// Initialization
+// ============================================
+
+function InitializeMod()
+{
+    Log("==[ " .. MOD_NAME .. " v" .. MOD_VERSION .. " ]==")
+    Log("Initializing...")
+    
+    -- Initialize configuration
+    if (!InitializeConfiguration()) then
+        Log("ERROR: Configuration initialization failed")
+        return false
+    end
+    
+    -- Check if we should enable debug mode
+    inDebugMode = DEBUG_ENABLED
+    if (inDebugMode) then
+        Log("Debug mode: ENABLED")
+    end
+    
+    -- Initialize state collector
+    if (!InitializeStateCollector()) then
+        Log("ERROR: State collector initialization failed")
+        return false
+    end
+    
+    -- Initialize IPC
+    if (!InitializeIPC()) then
+        Log("ERROR: IPC initialization failed")
+        return false
+    end
+    
+    modInitialized = true
+    Log("Initialization COMPLETE")
+    Log("Mod is now active")
+    
+    return true
+}
+
+// ============================================
+// Main Update Loop
+// ============================================
+
+function OnGameUpdate(deltaTime)
+{
+    -- Skip if mod is not initialized or disabled
+    if (!modInitialized || !modEnabled) then
+        return
+    end
+    
+    local currentTime = GetTimestamp()
+    
+    -- Update IPC system (handles both state writing and command reading)
+    if (currentTime - lastUpdateTime >= IPC_UPDATE_INTERVAL) then
+        lastUpdateTime = currentTime
+        
+        local ipcUpdated = UpdateIPC(deltaTime)
+        
+        if (ipcUpdated) {
+            -- IPC activity occurred
+            if (currentTime - lastStateCollectionTime < STATE_COLLECTION_INTERVAL) then
+                stats.states_collected = stats.states_collected + 1
+                stats.last_state_time = currentTime
+            end
+        end
+    end
+    
+    -- Additional mod logic can go here
+    UpdateReflexLayer(deltaTime)
+}
+
+// ============================================
+// Reflex Layer (Local Decision Making)
+// ============================================
+
+function UpdateReflexLayer(deltaTime)
+{
+    -- This would contain the local reflex behaviors that don't require Mistral
+    -- For now, this is a placeholder for future implementation
+    
+    -- In Phase 2, this would include:
+    -- - Retreat low-health squads under fire
+    -- - Respond to artillery
+    -- - Basic capture micro
+    -- - Keep build queues non-empty
+    
+    -- For now, just update statistics
+    local player = GetLocalPlayer()
+    if (IsValidPlayer(player)) then
+        local squads = player:GetSquads()
+        if (squads ~= null) then
+            for i = 1, #squads do
+                local squad = squads[i]
+                if (squad ~= null) then
+                    -- Check for low health squads
+                    local health = squad:GetHealth()
+                    if (health.current > 0 and health.max > 0) then
+                        local healthPercent = health.current / health.max
+                        
+                        -- Low health retreat (configured threshold)
+                        if (healthPercent <= RETREAT_HEALTH_THRESHOLD) then
+                            if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+                                Log(string.format("Reflex: Squad %d at %.1f%% health - consider retreat", 
+                                    squad:GetId(), healthPercent * 100))
+                            end
+                            
+                            -- Execute retreat if under fire
+                            if (squad:UnderFire()) then
+                                squad:Retreat()
+                                if (ShouldLog(DEBUG_LEVEL_INFO)) then
+                                    Log(string.format("Reflex: Squad %d retreated due to low health and under fire", 
+                                        squad:GetId()))
+                                end
+                            end
+                        end
+                        
+                        -- Critical health retreat
+                        if (healthPercent <= CRITICAL_HEALTH_THRESHOLD) then
+                            squad:Retreat()
+                            if (ShouldLog(DEBUG_LEVEL_INFO)) then
+                                Log(string.format("Reflex: Squad %d critically low health - FORCED RETREAT", 
+                                    squad:GetId()))
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+}
+
+// ============================================
+// Command Processing
+// ============================================
+
+function ProcessAICommand(command)
+{
+    -- This function handles commands from the Mistral AI
+    -- For Phase 0, this is just a placeholder
+    
+    if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log("Processing AI command: " .. (command.command or "unknown"))
+    end
+    
+    -- In Phase 3, this would execute the validated AI commands
+    -- For now, just log and pass to standard command processing
+    return ProcessCommand(command)
+}
+
+// ============================================
+// Game Event Handlers
+// ============================================
+
+function OnGameStart()
+{
+    Log("Game started - initializing mod")
+    InitializeMod()
+}
+
+function OnGameEnd()
+{
+    Log("Game ended - shutting down mod")
+    modEnabled = false
+    
+    -- Write final state
+    local finalState = CollectGameState()
+    if (finalState ~= null) then
+        WriteGameState(finalState)
+    end
+    
+    Log("Mod shutdown complete")
+}
+
+function OnPlayerDefeated(player)
+{
+    if (player == GetLocalPlayer()) then
+        Log("Local player defeated!")
+        modEnabled = false
+    end
+}
+
+function OnPlayerVictorious(player)
+{
+    if (player == GetLocalPlayer()) then
+        Log("Local player victorious!")
+    end
+}
+
+// ============================================
+// Testing Functions
+// ============================================
+
+function TestStateCollection()
+{
+    Log("=== Testing State Collection ===")
+    
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then
+        Log("ERROR: No valid local player for testing")
+        return false
+    end
+    
+    -- Test resources
+    local resources = CollectResources()
+    Log("Resources: MP=" .. resources.manpower.current .. "/" .. resources.manpower.max .. 
+                ", Fuel=" .. resources.fuel.current .. "/" .. resources.fuel.max .. 
+                ", Muni=" .. resources.munitions.current .. "/" .. resources.munitions.max)
+    
+    -- Test squads
+    local squads = CollectSquads()
+    Log("Squads: " .. #squads .. " active")
+    
+    -- Test capture points
+    local cps = CollectCapturePoints()
+    Log("Capture Points: " .. #cps .. " total")
+    
+    -- Test tech tree
+    local tech = CollectTechTree()
+    Log("Tech: T1=" .. tostring(tech.tier_1) .. ", T2=" .. tostring(tech.tier_2) .. ", T3=" .. tostring(tech.tier_3))
+    
+    -- Test population
+    local pop = CollectPopulation()
+    Log("Population: " .. pop[1] .. "/" .. pop[2])
+    
+    -- Test full state collection
+    local state = CollectGameState()
+    Log("Full state collected successfully")
+    
+    return true
+}
+
+function TestIPC()
+{
+    Log("=== Testing IPC Communication ===")
+    
+    -- Test state writing
+    local state = CollectGameState()
+    if (WriteGameState(state)) then
+        Log("State written to file successfully")
+    else
+        Log("ERROR: Failed to write state")
+        return false
+    end
+    
+    -- Test command reading (would need external command file)
+    local commands = ReadCommands()
+    Log("Commands read: " .. #commands)
+    
+    return true
+}
+
+function RunTests()
+{
+    Log("=== Running SCAR Mod Tests ===")
+    
+    if (!TestStateCollection()) then
+        Log("ERROR: State collection tests failed")
+        return false
+    end
+    
+    if (!TestIPC()) then
+        Log("ERROR: IPC tests failed")
+        return false
+    end
+    
+    Log("All tests PASSED")
+    return true
+}
+
+// ============================================
+// Console Commands (for debugging)
+// ============================================
+
+function HandleConsoleCommand(command)
+{
+    if (command == "mod_test") then
+        RunTests()
+        return true
+    elseif (command == "mod_state") then
+        TestStateCollection()
+        return true
+    elseif (command == "mod_ipc") then
+        TestIPC()
+        return true
+    elseif (command == "mod_reload") then
+        modInitialized = false
+        InitializeMod()
+        return true
+    elseif (command == "mod_toggle") then
+        modEnabled = !modEnabled
+        Log("Mod " .. (modEnabled and "ENABLED" or "DISABLED"))
+        return true
+    elseif (command == "mod_stats") then
+        Log("Stats: " .. stats.states_collected .. " states, " .. 
+                   stats.commands_processed .. " commands, " .. 
+                   stats.errors .. " errors")
+        return true
+    end
+    
+    return false
+}
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function Log(message, level)
+{
+    local logLevel = level or DEBUG_LEVEL_INFO
+    
+    if (ShouldLog(logLevel)) then
+        -- Use SCAR's logging system
+        if (logLevel >= DEBUG_LEVEL_ERROR) then
+            ebx:Debug.LogError(MOD_NAME .. ": " .. tostring(message))
+        elseif (logLevel >= DEBUG_LEVEL_WARNING) then
+            ebx:Debug.LogWarning(MOD_NAME .. ": " .. tostring(message))
+        elseif (logLevel >= DEBUG_LEVEL_INFO) then
+            ebx:Debug.Log(MOD_NAME .. ": " .. tostring(message))
+        else
+            ebx:Debug.LogDebug(MOD_NAME .. ": " .. tostring(message))
+        end
+    end
+}
+
+function ShouldLog(level)
+{
+    return DEBUG_ENABLED and level <= DEBUG_LEVEL
+}
+
+function Sleep(seconds)
+{
+    -- SCAR sleep function
+    if (ebx ~= null and ebx.System ~= null) then
+        ebx:System.Sleep(seconds * 1000)  -- Convert to milliseconds
+    end
+}
+
+function DoesFileExist(filename)
+{
+    -- Check if file exists
+    local file = io.open(filename, "r")
+    if (file ~= null) then
+        file:close()
+        return true
+    end
+    return false
+}
+
+function CreateDirectory(path)
+{
+    -- Create directory if it doesn't exist
+    -- SCAR may have limited filesystem access, so this might not work
+    os.execute("mkdir \"" .. path .. "\"")
+}
+
+// ============================================
+// Main Entry Point
+// ============================================
+
+-- This function is called by SCAR when the mod loads
+function OnScriptLoad()
+{
+    Log("SCRIPT LOADED: " .. MOD_NAME .. " v" .. MOD_VERSION)
+    
+    -- Initialize the mod when game starts
+    -- Register for game events
+    if (ebx ~= null) then
+        -- Try to register for game start event
+        if (ebx.Game ~= null and ebx.Game.AddOnGameStartCallback ~= null) then
+            ebx:Game.AddOnGameStartCallback(OnGameStart)
+        end
+        
+        -- Register for game update
+        if (ebx.Game ~= null and ebx.Game.AddOnUpdateCallback ~= null) then
+            ebx:Game.AddOnUpdateCallback(OnGameUpdate)
+        end
+    end
+    
+    -- Fallback: initialize immediately
+    if (!modInitialized) then
+        InitializeMod()
+    end
+}
+
+-- This function is called by SCAR when the mod unloads
+function OnScriptUnload()
+{
+    Log("SCRIPT UNLOADED: " .. MOD_NAME)
+    modEnabled = false
+    modInitialized = false
+}
+
+// ============================================
+// For testing without SCAR environment
+// ============================================
+
+-- If running in standalone test mode
+if (_G.TestMode ~= null and _G.TestMode == true) then
+    function TestMain()
+        print("Testing " .. MOD_NAME .. " in standalone mode...")
+        
+        -- Mock the ebx API for testing
+        if (ebx == null) then
+            ebx = {}
+            ebx.Game = {
+                GetLocalPlayer = function() return { IsValid = function() return true end } end,
+                GetGameTime = function() return os.time() end,
+                GetMap = function() return { GetCapturePoints = function() return {} end } end
+            }
+            ebx.Debug = {
+                Log = function(msg) print("[LOG] " .. tostring(msg)) end,
+                LogError = function(msg) print("[ERROR] " .. tostring(msg)) end,
+                LogWarning = function(msg) print("[WARNING] " .. tostring(msg)) end,
+                LogDebug = function(msg) print("[DEBUG] " .. tostring(msg)) end
+            }
+        end
+        
+        InitializeMod()
+        RunTests()
+    end
+    
+    TestMain()
+end
