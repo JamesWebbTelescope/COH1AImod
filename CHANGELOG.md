@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - scar/state_collector.scar - Initial SCAR script for game state collection
 - tests/ directory structure with unit/, integration/, and regression/ subdirectories
 - .gitignore - Git ignore configuration for Python, IDE, OS, and SCAR files
+- python/config.py - Configuration management module with API, game, IPC, and debug settings
+- python/ipc_reader.py - Python service for reading state from IPC channel
+- python/main.py - Main orchestrator service entry point
+- python/schema.py - JSON schema definitions for game state and commands
+- docs/SCAR_RESEARCH.md - SCAR modding framework research documentation
+- docs/TESTING_GUIDE.md - Testing guide and strategy documentation
+- scar/config.scar - SCAR configuration handling script
+- coh1ai_data/ directory for runtime data files (logs, config, state)
+- tests/unit/ - Unit test directory structure
+- tests/integration/ - Integration test directory structure
 
 ## v1.0.0 - 2026-10-04
 

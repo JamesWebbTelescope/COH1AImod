@@ -1,0 +1,367 @@
+// ============================================
+// CoH1 × Mistral AI Mod - Configuration
+// ============================================
+//
+// Central configuration for the mod.
+//
+// Author: Generated via planner skill
+// Version: 0.1.0
+// Date: 2026-10-04
+//
+
+// ============================================
+// Mod Configuration
+// ============================================
+
+// Mod identity
+constant MOD_NAME = "CoH1 Mistral AI Mod"
+constant MOD_VERSION = "0.1.0"
+constant MOD_AUTHOR = "Generated via planner skill"
+
+// ============================================
+// IPC Configuration
+// ============================================
+
+// File paths for IPC
+constant IPC_STATE_FILE = "coh1ai_state.json"
+constant IPC_COMMAND_FILE = "coh1ai_commands.json"
+constant IPC_LOCK_FILE = "coh1ai_lock.tmp"
+
+// IPC timing
+constant IPC_POLL_INTERVAL = 0.05  // 50ms polling interval
+constant MAX_RETRIES = 3
+constant COMMAND_TIMEOUT = 1.0  // Command execution timeout
+
+// ============================================
+// Game State Collection
+// ============================================
+
+// Collection intervals (seconds)
+constant STATE_COLLECTION_INTERVAL = 1.0
+constant FAST_COLLECTION_INTERVAL = 0.1  // For reflex layer
+
+// ============================================
+// Reflex Layer Configuration
+// ============================================
+
+// Health thresholds
+constant RETREAT_HEALTH_THRESHOLD = 0.3
+constant CRITICAL_HEALTH_THRESHOLD = 0.15
+
+// Combat timing
+constant UNDER_FIRE_DURATION = 2.0
+constant SUPPRESSION_DURATION = 1.5
+
+// Build queue
+constant BUILD_QUEUE_MAX_SIZE = 5
+constant BUILD_QUEUE_MIN_SIZE = 1
+
+// Capture point priorities
+constant CAPTURE_PRIORITY_HIGH = 3
+constant CAPTURE_PRIORITY_MEDIUM = 2
+constant CAPTURE_PRIORITY_LOW = 1
+
+// ============================================
+// Strategic Layer Configuration
+// ============================================
+
+// Timing for strategic decisions
+constant STRATEGIC_TICK_INTERVAL = 10.0  // Seconds between strategic decisions
+constant FAST_TICK_INTERVAL = 0.5  // Seconds between fast ticks
+
+// ============================================
+// Mistral API Configuration
+// ============================================
+
+// API settings (these would be overridden by config file)
+constant MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
+constant MISTRAL_MODEL_LARGE = "mistral-large-latest"
+constant MISTRAL_MODEL_SMALL = "mistral-small-latest"
+
+// Default model
+constant DEFAULT_MODEL = MISTRAL_MODEL_SMALL
+
+// Rate limiting
+constant MAX_API_CALLS_PER_MATCH = 200
+constant API_CALL_BUDGET = 150  // Budget for non-critical calls
+
+// ============================================
+// Cost Configuration
+// ============================================
+
+// Resource cost multipliers
+constant COST_MULTIPLIER_MANPOWER = 1.0
+constant COST_MULTIPLIER_FUEL = 1.0
+constant COST_MULTIPLIER_MUNITIONS = 1.0
+
+// ============================================
+// Debug Configuration
+// ============================================
+
+// Debug levels
+constant DEBUG_LEVEL_NONE = 0
+constant DEBUG_LEVEL_ERROR = 1
+constant DEBUG_LEVEL_WARNING = 2
+constant DEBUG_LEVEL_INFO = 3
+constant DEBUG_LEVEL_DEBUG = 4
+
+// Current debug level
+constant DEBUG_LEVEL = DEBUG_LEVEL_INFO
+
+// Debug flags
+constant DEBUG_ENABLED = true
+constant DEBUG_FILE_LOGGING = true
+constant DEBUG_CONSOLE_LOGGING = true
+
+// ============================================
+// Performance Configuration
+// ============================================
+
+// Performance optimization flags
+constant USE_COMPACT_JSON = true
+constant USE_DELTA_STATES = false  // Not implemented yet
+constant CACHE_ENABLED = true
+
+// Memory limits
+constant MAX_STATE_HISTORY = 10  // Number of states to keep in memory
+constant MAX_LOG_FILE_SIZE = 1024 * 1024  // 1MB max log file size
+
+// ============================================
+// Game Configuration
+// ============================================
+
+// Supported factions
+constant FACTION_ALLIES = "allies"
+constant FACTION_AXIS = "axis"
+
+// Default faction
+constant DEFAULT_FACTION = FACTION_ALLIES
+
+// Difficulty levels
+constant DIFFICULTY_EASY = "easy"
+constant DIFFICULTY_NORMAL = "normal"
+constant DIFFICULTY_HARD = "hard"
+constant DIFFICULTY_EXPERT = "expert"
+
+// Default difficulty
+constant DEFAULT_DIFFICULTY = DIFFICULTY_NORMAL
+
+// ============================================
+// Command Configuration
+// ============================================
+
+// Command priorities
+constant CMD_PRIORITY_CRITICAL = 4  // Must execute immediately
+constant CMD_PRIORITY_HIGH = 3     // Should execute soon
+constant CMD_PRIORITY_NORMAL = 2  // Normal priority
+constant CMD_PRIORITY_LOW = 1      // Can wait
+
+// Command timeouts
+constant CMD_TIMEOUT_CRITICAL = 0.5  // 500ms
+constant CMD_TIMEOUT_HIGH = 1.0       // 1 second
+constant CMD_TIMEOUT_NORMAL = 2.0    // 2 seconds
+constant CMD_TIMEOUT_LOW = 5.0        // 5 seconds
+
+// ============================================
+// Safety Configuration
+// ============================================
+
+// Safety check flags
+constant SAFETY_CHECK_RESOURCES = true
+constant SAFETY_CHECK_POPULATION = true
+constant SAFETY_CHECK_PATHFINDING = true
+constant SAFETY_CHECK_LEGALITY = true
+
+// Safety thresholds
+constant MIN_RESOURCE_MARGIN = 50  // Minimum resources to keep in reserve
+constant MIN_POPULATION_MARGIN = 5   // Minimum population slots to keep free
+
+// ============================================
+// Fallback Configuration
+// ============================================
+
+// Fallback behavior
+constant FALLBACK_TO_STOCK_AI = true
+constant FALLBACK_TO_REFLEX_ONLY = true
+constant FALLBACK_TO_HEURISTICS = true
+
+// Fallback detection
+constant FALLBACK_API_TIMEOUT = 5.0  // Seconds without API response before fallback
+constant FALLBACK_API_ERROR_LIMIT = 3  // Number of consecutive errors before fallback
+
+// ============================================
+// File Paths
+// ============================================
+
+// Data directory
+constant DATA_DIR = "coh1ai_data/"
+
+// Log files
+constant LOG_FILE = DATA_DIR + "coh1ai.log"
+constant STATE_LOG_FILE = DATA_DIR + "states.jsonl"
+constant COMMAND_LOG_FILE = DATA_DIR + "commands.jsonl"
+constant ERROR_LOG_FILE = DATA_DIR + "errors.log"
+
+// Configuration files
+constant CONFIG_FILE = DATA_DIR + "config.json"
+
+// ============================================
+// Testing Configuration
+// ============================================
+
+// Test mode
+constant TEST_MODE = false
+constant TEST_FAKE_GAME_DATA = false
+
+// Test settings
+constant TEST_TICK_INTERVAL = 0.1  // Faster ticks for testing
+constant TEST_MAX_RUN_TIME = 300   // 5 minutes max test run
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function GetModVersion()
+{
+    return MOD_VERSION
+}
+
+function GetModName()
+{
+    return MOD_NAME
+}
+
+function IsDebugEnabled()
+{
+    return DEBUG_ENABLED
+}
+
+function GetDebugLevel()
+{
+    return DEBUG_LEVEL
+}
+
+function ShouldLog(level)
+{
+    return DEBUG_ENABLED && level <= DEBUG_LEVEL
+}
+
+// ============================================
+// Configuration Loading/Saving
+// ============================================
+
+// Placeholder for configuration loading from file
+function LoadConfiguration()
+{
+    Log("Loading configuration from file")
+    // Implementation depends on file I/O capabilities
+    return true
+}
+
+function SaveConfiguration()
+{
+    Log("Saving configuration to file")
+    // Implementation depends on file I/O capabilities
+    return true
+}
+
+// ============================================
+// Configuration Validation
+// ============================================
+
+function ValidateConfiguration()
+{
+    Log("Validating configuration")
+    
+    // Check critical settings
+    if (!IsValidFaction(DEFAULT_FACTION)) {
+        Log("ERROR: Invalid default faction")
+        return false
+    }
+    
+    if (!IsValidDifficulty(DEFAULT_DIFFICULTY)) {
+        Log("ERROR: Invalid default difficulty")
+        return false
+    }
+    
+    return true
+}
+
+function IsValidFaction(faction)
+{
+    return faction == FACTION_ALLIES || faction == FACTION_AXIS
+}
+
+function IsValidDifficulty(difficulty)
+{
+    return difficulty == DIFFICULTY_EASY ||
+           difficulty == DIFFICULTY_NORMAL ||
+           difficulty == DIFFICULTY_HARD ||
+           difficulty == DIFFICULTY_EXPERT
+}
+
+// ============================================
+// Default Configuration
+// ============================================
+
+function GetDefaultConfiguration()
+{
+    return {
+        "mod": {
+            "version": MOD_VERSION,
+            "name": MOD_NAME
+        },
+        "ipc": {
+            "state_file": IPC_STATE_FILE,
+            "command_file": IPC_COMMAND_FILE,
+            "poll_interval": IPC_POLL_INTERVAL,
+            "max_retries": MAX_RETRIES
+        },
+        "game": {
+            "faction": DEFAULT_FACTION,
+            "difficulty": DEFAULT_DIFFICULTY
+        },
+        "mistral": {
+            "api_url": MISTRAL_API_URL,
+            "model": DEFAULT_MODEL,
+            "max_calls": MAX_API_CALLS_PER_MATCH,
+            "api_key": "YOUR_API_KEY_HERE"
+        },
+        "reflex": {
+            "retreat_threshold": RETREAT_HEALTH_THRESHOLD,
+            "critical_threshold": CRITICAL_HEALTH_THRESHOLD,
+            "build_queue_min": BUILD_QUEUE_MIN_SIZE,
+            "build_queue_max": BUILD_QUEUE_MAX_SIZE
+        },
+        "debug": {
+            "enabled": DEBUG_ENABLED,
+            "level": DEBUG_LEVEL,
+            "file_logging": DEBUG_FILE_LOGGING,
+            "console_logging": DEBUG_CONSOLE_LOGGING
+        }
+    }
+}
+
+// ============================================
+// Initialization
+// ============================================
+
+function InitializeConfiguration()
+{
+    Log("Initializing configuration")
+    
+    // Load or create default configuration
+    if (!LoadConfiguration()) {
+        Log("No configuration file found, using defaults")
+        // Configuration will use defaults defined above
+    }
+    
+    // Validate configuration
+    if (!ValidateConfiguration()) {
+        Log("ERROR: Configuration validation failed")
+        return false
+    }
+    
+    Log("Configuration initialized successfully")
+    return true
+}

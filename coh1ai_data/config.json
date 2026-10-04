@@ -1,0 +1,70 @@
+{
+  "mod": {
+    "version": "0.1.0",
+    "name": "CoH1 Mistral AI Mod"
+  },
+  "ipc": {
+    "state_file": "coh1ai_state.json",
+    "command_file": "coh1ai_commands.json",
+    "lock_file": "coh1ai_lock.tmp",
+    "poll_interval": 0.05,
+    "max_retries": 3,
+    "data_dir": "coh1ai_data"
+  },
+  "game": {
+    "faction": "allies",
+    "difficulty": "normal",
+    "player_id": 1
+  },
+  "mistral": {
+    "api_url": "https://api.mistral.ai/v1/chat/completions",
+    "model": "mistral-small-latest",
+    "max_calls_per_match": 200,
+    "api_key": "",
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "json_mode": true
+  },
+  "reflex": {
+    "enabled": true,
+    "retreat_health_threshold": 0.3,
+    "critical_health_threshold": 0.15,
+    "under_fire_duration": 2.0,
+    "suppression_duration": 1.5,
+    "build_queue_min": 1,
+    "build_queue_max": 5,
+    "update_interval": 0.2
+  },
+  "safety": {
+    "check_resources": true,
+    "check_population": true,
+    "check_pathfinding": true,
+    "check_legality": true,
+    "min_resource_margin": 50,
+    "min_population_margin": 5
+  },
+  "fallback": {
+    "enabled": true,
+    "to_stock_ai": true,
+    "to_reflex_only": true,
+    "to_heuristics": true,
+    "api_timeout": 5.0,
+    "api_error_limit": 3
+  },
+  "debug": {
+    "enabled": true,
+    "level": "INFO",
+    "file_logging": true,
+    "console_logging": true,
+    "log_file": "coh1ai.log",
+    "state_log_file": "states.jsonl",
+    "command_log_file": "commands.jsonl",
+    "error_log_file": "errors.log"
+  },
+  "testing": {
+    "test_mode": false,
+    "fake_game_data": false,
+    "test_tick_interval": 0.1,
+    "max_run_time": 300
+  }
+}
