@@ -31,6 +31,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import load_config, get_config
 from ipc_reader import IPCReader, start_ipc, stop_ipc, get_ipc_reader
+from logger import StateLogger, LogParser
+from scheduler import StrategicTickScheduler, FastTickScheduler, SchedulerManager
 
 
 class OrchestratorService:
@@ -68,6 +70,22 @@ class OrchestratorService:
         # Initialize IPC reader
         self.ipc_reader = IPCReader(self.config)
         
+        # Initialize state logger
+        self.state_logger = StateLogger(self.config)
+        
+        # Initialize schedulers
+        self.scheduler_manager = SchedulerManager()
+        self.strategic_scheduler = StrategicTickScheduler(
+            interval=10.0,  # 10 seconds between strategic decisions
+            callback=self._on_strategic_tick
+        )
+        self.fast_scheduler = FastTickScheduler(
+            interval=0.5,  # 500ms between fast ticks
+            callback=self._on_fast_tick
+        )
+        self.scheduler_manager.add_scheduler("strategic", self.strategic_scheduler)
+        self.scheduler_manager.add_scheduler("fast", self.fast_scheduler)
+        
         self.logger.info(f"CoH1 AI Orchestrator v{self.config.get('mod', 'version')} initialized")
         if test_mode:
             self.logger.info("Running in TEST mode")
@@ -93,6 +111,9 @@ class OrchestratorService:
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
         
+        # Start schedulers
+        self.scheduler_manager.start_all()
+        
         self.logger.info("Orchestrator service started successfully")
         self.logger.info(f"IPC state file: {self.ipc_reader.state_file}")
         self.logger.info(f"IPC command file: {self.ipc_reader.command_file}")
@@ -107,6 +128,9 @@ class OrchestratorService:
             return True
         
         self.logger.info("Stopping orchestrator service...")
+        
+        # Stop schedulers
+        self.scheduler_manager.stop_all()
         
         # Stop IPC reader
         if not self.ipc_reader.stop():
@@ -166,8 +190,11 @@ class OrchestratorService:
         """Handle a state message from SCAR."""
         self.logger.debug(f"Received state message at {message.timestamp}")
         
-        # Log state summary
+        # Log state using state logger
         state = message.data
+        self.state_logger.log_state(state)
+        
+        # Log state summary
         if "player_id" in state:
             self.logger.info(f"State update from player {state['player_id']}")
             
@@ -186,6 +213,18 @@ class OrchestratorService:
         # Send test command if in test mode
         if self.test_mode:
             self._send_test_command()
+    
+    def _on_strategic_tick(self):
+        """Callback for strategic tick scheduler."""
+        self.logger.info("Strategic tick - Time to make macro decisions")
+        # In Phase 1, we just log this event
+        # In Phase 2+, this will trigger strategist decisions
+        
+    def _on_fast_tick(self):
+        """Callback for fast tick scheduler."""
+        self.logger.debug("Fast tick - Reflex layer update")
+        # In Phase 1, we just log this event
+        # In Phase 2+, this will trigger reflex decisions
     
     def _generate_mock_data(self):
         """Generate mock game data for testing."""

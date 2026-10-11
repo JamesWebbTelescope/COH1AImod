@@ -33,12 +33,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SCAR Configuration** (`scar/config.scar`) - Enhanced with utility functions
   - Added `GetLocalPlayer()` and validation functions
   - Enhanced error handling and logging
+- **SCAR Documentation** (`docs/SCAR_IMPLEMENTATION.md`) - Complete implementation guide
+  - API reference from https://scardoc.coh.fi/
+  - Module architecture and data flow documentation
+  - Testing and troubleshooting guide
+- **Project Documentation** (`README.md`) - Complete project documentation
+  - Quick start guide and installation instructions
+  - Project status tracking across all phases
+  - Architecture overview and usage examples
+- **Phase 0 Documentation** - Complete Phase 0 deliverables
+  - `TEST_PLAN.md` - Comprehensive testing plan for Phase 0
+  - `docs/FALLBACK_IPC_DOCUMENTATION.md` - Fallback IPC methods documentation
+  - `docs/IPC_LATENCY_REPORT.md` - IPC latency verification report
+  - `docs/PHASE_0_COMPLETION.md` - Phase 0 completion summary
+- **New Python Modules**
+  - `python/logger.py` - State logging module with log rotation
+    - `StateLogger` class for game state snapshots
+    - `LogParser` class for post-match analysis
+    - `LogRotator` for automatic log file management
+  - `python/scheduler.py` - Tick schedulers for decision-making
+    - `StrategicTickScheduler` for macro-level decisions (10s interval)
+    - `FastTickScheduler` for reflex layer updates (500ms interval)
+    - `SchedulerManager` for coordinating multiple schedulers
+    - Full threading support and statistics tracking
+  - `python/ipc_fallback.py` - Fallback IPC methods
+    - `SharedMemoryIPC` - Memory-mapped file communication
+    - `ConsoleLogRelayIPC` - Console/log file relay approach
+    - `FallbackIPCManager` - Automatic fallback handling
+- **New Test Files**
+  - `tests/__init__.py` - Test package initialization
+  - `tests/unit/test_logger.py` - Unit tests for logger module
+  - `tests/unit/test_scheduler.py` - Unit tests for scheduler module
+  - `tests/unit/test_schema.py` - Unit tests for schema validation
+  - `tests/performance/` - Performance test directory
+- **Build Scripts**
+  - `package_mod.bat` - Mod packaging script for creating .sga files
+  - `run_mod.bat` - Convenience script for running the mod
 
 ### Changed
 - **State Collector Version** - Updated from v0.1.0 to v0.2.0 with real SCAR API implementation
 - **IPC System** - Replaced placeholders with actual file-based communication using SCAR-compatible methods
 - **Data Structure** - Updated to match expected JSON schema for Python orchestrator
 - **Error Handling** - Added comprehensive error handling throughout SCAR modules
+- **Configuration** (`python/config.py`) - Enhanced with multi-path data directory resolution
+  - Added `_resolve_data_dir()` method to check multiple locations for IPC files
+  - Prioritizes CoH1 base directory where SCAR writes files
+  - Fallback to mod directory and Steam paths for flexibility
+- **IPC Reader** (`python/ipc_reader.py`) - Enhanced with robust path resolution
+  - Multiple data directory checking with automatic fallback
+  - Better error handling and logging for file operations
+  - Dynamic file path resolution based on actual file locations
+- **Main Orchestrator** (`python/main.py`) - Integrated new subsystems
+  - Added `StateLogger` integration for persistent state logging
+  - Integrated `SchedulerManager` with strategic (10s) and fast (500ms) tick schedulers
+  - Callback handlers for strategic and fast tick events
+  - Proper lifecycle management for all components
 
 ### Fixed
 - **Placeholder Functions** - Replaced all placeholder data collection functions with real SCAR API calls

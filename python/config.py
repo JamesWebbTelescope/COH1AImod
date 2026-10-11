@@ -173,6 +173,51 @@ class Configuration:
         
         self._config = merge_recursive(self._config, file_config)
     
+    def _resolve_data_dir(self, config_data_dir: Path) -> Path:
+        """
+        Resolve the data directory by checking multiple possible locations.
+        
+        SCAR writes to coh1ai_data/ relative to CoH1's base directory,
+        while Python might run from the mod directory.
+        
+        Args:
+            config_data_dir: The configured data directory path
+            
+        Returns:
+            Path to the resolved data directory
+        """
+        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
+        data_dirs = []
+        
+        # FIRST: Check in CoH1's base directory (where SCAR writes files)
+        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
+        data_dirs.append(coh1_base / config_data_dir)
+        
+        # SECOND: Check absolute Steam path
+        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
+        if steam_path.exists():
+            data_dirs.append(steam_path / config_data_dir)
+        
+        # THIRD: Check in the mod directory
+        mod_dir = Path(__file__).parent
+        data_dirs.append(mod_dir / config_data_dir)
+        
+        # FOURTH: Check in mod directory under Steam
+        if steam_path.exists():
+            data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
+        
+        # FIFTH: Add the configured data directory relative to current working dir
+        data_dirs.append(Path(config_data_dir))
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        data_dirs = [p for p in data_dirs if not (p in seen or seen.add(p))]
+        
+        # Always prefer CoH1 base directory since that's where SCAR writes
+        # If it doesn't exist, it will be created when SCAR writes files
+        coh1_base_dir = data_dirs[0]  # First one is CoH1 base
+        return coh1_base_dir
+    
     def get(self, *keys, default=None) -> Any:
         """
         Get a configuration value by key path.
@@ -282,7 +327,9 @@ class Configuration:
         # Add file handler if enabled
         if file_logging and enabled:
             data_dir = self._config["ipc"]["data_dir"]
-            log_file = Path(data_dir) / debug_config.get("log_file", "coh1ai.log")
+            # Resolve the data directory to handle SCAR writing to CoH1 base vs Python in mod dir
+            resolved_data_dir = self._resolve_data_dir(Path(data_dir))
+            log_file = resolved_data_dir / debug_config.get("log_file", "coh1ai.log")
             
             try:
                 log_file.parent.mkdir(parents=True, exist_ok=True)

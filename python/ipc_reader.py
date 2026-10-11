@@ -89,16 +89,61 @@ class IPCReader:
         
         # Get paths from config
         ipc_config = self.config.get("ipc") or {}
-        self.state_file = Path(ipc_config.get("state_file") or "coh1ai_state.json")
-        self.command_file = Path(ipc_config.get("command_file") or "coh1ai_commands.json")
-        self.lock_file = Path(ipc_config.get("lock_file") or "coh1ai_lock.tmp")
+        self.state_file_name = ipc_config.get("state_file") or "coh1ai_state.json"
+        self.command_file_name = ipc_config.get("command_file") or "coh1ai_commands.json"
+        self.lock_file_name = ipc_config.get("lock_file") or "coh1ai_lock.tmp"
         
         self.poll_interval = ipc_config.get("poll_interval") or 0.05
         self.max_retries = ipc_config.get("max_retries") or 3
-        self.data_dir = Path(ipc_config.get("data_dir") or "coh1ai_data")
+        
+        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
+        # SCAR writes to coh1ai_data/ relative to CoH1's base directory
+        # Python might run from the mod directory
+        self.data_dirs = []
+        config_data_dir = ipc_config.get("data_dir") or "coh1ai_data"
+        
+        # FIRST: Check in CoH1's base directory (where SCAR writes files)
+        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
+        self.data_dirs.append(coh1_base / config_data_dir)
+        
+        # SECOND: Check absolute Steam path
+        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
+        if steam_path.exists():
+            self.data_dirs.append(steam_path / config_data_dir)
+        
+        # THIRD: Check in the mod directory
+        mod_dir = Path(__file__).parent
+        self.data_dirs.append(mod_dir / config_data_dir)
+        
+        # FOURTH: Check in mod directory under Steam
+        if steam_path.exists():
+            self.data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
+        
+        # FIFTH: Add the configured data directory relative to current working dir
+        self.data_dirs.append(Path(config_data_dir))
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        self.data_dirs = [p for p in self.data_dirs if not (p in seen or seen.add(p))]
+        
+        # Always prefer CoH1 base directory since that's where SCAR writes
+        # If it doesn't exist, it will be created when SCAR writes files
+        self.data_dir = self.data_dirs[0]  # First one is CoH1 base
+        
+        self.logger.info(f"Checking data directories: {[str(d) for d in self.data_dirs]}")
+        self.logger.info(f"Using data directory: {self.data_dir}")
         
         # Ensure data directory exists
         self._ensure_data_dir()
+        
+        # Update file paths to use the resolved data_dir
+        self.state_file = self.data_dir / self.state_file_name
+        self.command_file = self.data_dir / self.command_file_name
+        self.lock_file = self.data_dir / self.lock_file_name
+        
+        self.logger.info(f"State file: {self.state_file}")
+        self.logger.info(f"Command file: {self.command_file}")
+        self.logger.info(f"Lock file: {self.lock_file}")
         
         # Status and state
         self.status = IPCStatus.DISCONNECTED
@@ -200,15 +245,30 @@ class IPCReader:
     
     def _read_state_file(self) -> Optional[Dict[str, Any]]:
         """Read the state file if it exists."""
-        if not self.state_file.exists():
-            return None
+        # Try primary state file first
+        if self.state_file.exists():
+            return self._read_state_file_at(self.state_file)
         
+        # Try all data directories
+        for data_dir in self.data_dirs:
+            test_file = data_dir / self.state_file_name
+            if test_file.exists():
+                self.logger.info(f"Found state file at: {test_file}")
+                self.state_file = test_file
+                self.command_file = data_dir / self.command_file_name
+                self.lock_file = data_dir / self.lock_file_name
+                return self._read_state_file_at(test_file)
+        
+        return None
+    
+    def _read_state_file_at(self, filepath: Path) -> Optional[Dict[str, Any]]:
+        """Read state file at a specific path."""
         try:
             with self._acquire_lock():
-                if not self.state_file.exists():
+                if not filepath.exists():
                     return None
                     
-                with open(self.state_file, 'r', encoding='utf-8') as f:
+                with open(filepath, 'r', encoding='utf-8') as f:
                     content = f.read()
                     if not content.strip():
                         return None
@@ -217,10 +277,10 @@ class IPCReader:
                         data = json.loads(content)
                         return data
                     except json.JSONDecodeError as e:
-                        self.logger.warning(f"Failed to parse JSON from state file: {e}")
+                        self.logger.warning(f"Failed to parse JSON from state file {filepath}: {e}")
                         return None
         except (IOError, OSError) as e:
-            self.logger.warning(f"Failed to read state file: {e}")
+            self.logger.warning(f"Failed to read state file {filepath}: {e}")
             return None
     
     def _cleanup_state_file(self):
