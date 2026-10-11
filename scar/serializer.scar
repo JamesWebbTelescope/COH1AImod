@@ -1,0 +1,586 @@
+// ============================================
+// CoH1 × Mistral AI Mod - JSON Serializer
+// ============================================
+//
+// Provides JSON serialization and deserialization for game state data.
+// Uses SCAR's built-in JSON encoder/decoder for efficient processing.
+//
+// Author: Generated via planner skill
+// Version: 0.1.0
+// Date: 2026-10-11
+//
+// Documentation: https://scardoc.coh.fi/
+// ============================================
+
+// ============================================
+// Configuration
+// ============================================
+
+constant SERIALIZER_VERSION = "1.0"
+
+// ============================================
+// JSON Serialization Functions
+// ============================================
+
+function SerializeToJSON(data, prettyPrint)
+{
+    // Use SCAR's JSON encoder if available
+    if (json ~= null and json.encode ~= null) then
+        if (prettyPrint) then
+            return json.encode(data, 1)  // Indent with 1 space
+        else
+            return json.encode(data)
+        end
+    end
+    
+    // Fallback: use string formatting for simple serialization
+    return SerializeToJSONFallback(data)
+}
+
+function DeserializeFromJSON(jsonString)
+{
+    // Use SCAR's JSON decoder if available
+    if (json ~= null and json.decode ~= null) then
+        local success, data = pcall(function() return json.decode(jsonString) end)
+        if (success) then
+            return data
+        end
+    end
+    
+    // Fallback: return nil if JSON parsing fails
+    Log("WARNING: JSON decoder not available or failed")
+    return nil
+}
+
+// ============================================
+// Fallback JSON Serialization
+// ============================================
+
+function SerializeToJSONFallback(data)
+{
+    // Simple JSON serialization for basic data types
+    local dataType = type(data)
+    
+    if (dataType == "table") then
+        return SerializeTableToJSON(data)
+    elseif (dataType == "string") then
+        return string.format('"%s"', EscapeJSONString(data))
+    elseif (dataType == "number") then
+        return tostring(data)
+    elseif (dataType == "boolean") then
+        return data and "true" or "false"
+    elseif (data == null) then
+        return "null"
+    else
+        return "null"
+    end
+}
+
+function SerializeTableToJSON(tbl)
+{
+    local result = "{"
+    local first = true
+    
+    for key, value in pairs(tbl) do
+        if (not first) then
+            result = result .. ","
+        end
+        first = false
+        
+        local keyType = type(key)
+        local valueType = type(value)
+        
+        // Handle key
+        if (keyType == "string") then
+            result = result .. string.format('"%s":', EscapeJSONString(key))
+        elseif (keyType == "number") then
+            result = result .. string.format('"%s":', tostring(key))
+        else
+            result = result .. '"":'
+        end
+        
+        // Handle value
+        if (valueType == "table") then
+            result = result .. SerializeTableToJSON(value)
+        elseif (valueType == "string") then
+            result = result .. string.format('"%s"', EscapeJSONString(value))
+        elseif (valueType == "number") then
+            result = result .. tostring(value)
+        elseif (valueType == "boolean") then
+            result = result .. (value and "true" or "false")
+        elseif (value == null) then
+            result = result .. "null"
+        else
+            result = result .. "null"
+        end
+    end
+    
+    result = result .. "}"
+    return result
+}
+
+function EscapeJSONString(str)
+{
+    // Escape special characters in JSON strings
+    str = string.gsub(str, "\\", "\\\\")
+    str = string.gsub(str, '"', '\\"')
+    str = string.gsub(str, "\n", "\\n")
+    str = string.gsub(str, "\r", "\\r")
+    str = string.gsub(str, "\t", "\\t")
+    return str
+}
+
+// ============================================
+// Game State Serialization
+// ============================================
+
+function SerializeGameState(state)
+{
+    -- Add metadata for serialization version
+    state._serializer_version = SERIALIZER_VERSION
+    state._serialization_timestamp = GetTimestamp()
+    
+    -- Convert to JSON
+    local jsonString = SerializeToJSON(state)
+    
+    -- Remove metadata before returning (optional, for cleaner output)
+    state._serializer_version = nil
+    state._serialization_timestamp = nil
+    
+    return jsonString
+}
+
+function DeserializeGameState(jsonString)
+{
+    local state = DeserializeFromJSON(jsonString)
+    
+    if (state == nil) then
+        Log("ERROR: Failed to deserialize game state")
+        return nil
+    end
+    
+    -- Validate that it has required fields
+    if (state.version == nil or state.player_id == nil or state.timestamp == nil) then
+        Log("ERROR: Deserialized state is missing required fields")
+        return nil
+    end
+    
+    return state
+}
+
+// ============================================
+// Compact JSON Serialization
+// ============================================
+
+function SerializeCompactGameState(state)
+{
+    -- Create a compact version of the state for transmission
+    local compactState = {
+        version = state.version or "1.0",
+        pid = state.player_id or 1,
+        t = state.timestamp or GetTimestamp(),
+        gt = state.game_time or 0,
+        phase = state.phase or "early",
+        faction = state.faction or "allies"
+    }
+    
+    -- Add resources in compact format
+    if (state.resources ~= nil) then
+        compactState.r = {
+            mp = state.resources.manpower or {c = 0, i = 0, m = 1000},
+            fuel = state.resources.fuel or {c = 0, i = 0, m = 800},
+            muni = state.resources.munitions or {c = 0, i = 0, m = 600}
+        }
+    end
+    
+    -- Add squad count instead of full squad data for compact version
+    if (state.squads ~= nil) then
+        compactState.squads = #state.squads
+    end
+    
+    -- Add capture point count
+    if (state.cps ~= nil) then
+        compactState.cps = #state.cps
+    end
+    
+    -- Add enemy count
+    if (state.enemies ~= nil) then
+        compactState.enemies = #state.enemies
+    end
+    
+    -- Add tech state in compact format
+    if (state.tech ~= nil) then
+        compactState.tech = {
+            t1 = state.tech.tier_1 or false,
+            t2 = state.tech.tier_2 or false,
+            t3 = state.tech.tier_3 or false
+        }
+    end
+    
+    -- Add population in compact format
+    if (state.pop ~= nil) then
+        compactState.pop = state.pop or {0, 100}
+    end
+    
+    -- Serialize to JSON
+    return SerializeToJSON(compactState)
+}
+
+function DeserializeCompactGameState(jsonString)
+{
+    local compactState = DeserializeFromJSON(jsonString)
+    
+    if (compactState == nil) then
+        return nil
+    end
+    
+    -- Expand compact state back to full format
+    local state = {
+        version = compactState.version or "1.0",
+        player_id = compactState.pid or 1,
+        timestamp = compactState.t or 0,
+        game_time = compactState.gt or 0,
+        phase = compactState.phase or "early",
+        faction = compactState.faction or "allies"
+    }
+    
+    -- Expand resources
+    if (compactState.r ~= nil) then
+        state.resources = {
+            manpower = {current = compactState.r.mp.c or 0, income = compactState.r.mp.i or 0, max = compactState.r.mp.m or 1000},
+            fuel = {current = compactState.r.fuel.c or 0, income = compactState.r.fuel.i or 0, max = compactState.r.fuel.m or 800},
+            munitions = {current = compactState.r.muni.c or 0, income = compactState.r.muni.i or 0, max = compactState.r.muni.m or 600}
+        }
+    end
+    
+    -- For compact state, we can't restore full squad/cp/enemy data
+    -- These would need to be reconstructed from the game
+    state.squads = {}
+    state.cps = {}
+    state.enemies = {}
+    
+    -- Expand tech
+    if (compactState.tech ~= nil) then
+        state.tech = {
+            tier_1 = compactState.tech.t1 or false,
+            tier_2 = compactState.tech.t2 or false,
+            tier_3 = compactState.tech.t3 or false,
+            t1_progress = 0,
+            t2_progress = 0,
+            t3_progress = 0,
+            abilities = {}
+        }
+    end
+    
+    -- Expand population
+    if (compactState.pop ~= nil) then
+        state.pop = compactState.pop or {0, 100}
+    else
+        state.pop = {0, 100}
+    end
+    
+    state.queue = {}
+    
+    return state
+}
+
+// ============================================
+// Command Serialization
+// ============================================
+
+function SerializeCommand(command)
+{
+    -- Add timestamp if not present
+    if (command.timestamp == nil) then
+        command.timestamp = GetTimestamp()
+    end
+    
+    return SerializeToJSON(command)
+}
+
+function DeserializeCommand(jsonString)
+{
+    local command = DeserializeFromJSON(jsonString)
+    
+    if (command == nil) then
+        Log("ERROR: Failed to deserialize command")
+        return nil
+    end
+    
+    -- Validate command
+    if (command.command == nil) then
+        Log("ERROR: Command missing 'command' field")
+        return nil
+    end
+    
+    return command
+}
+
+function SerializeCommands(commands)
+{
+    local commandList = commands or {}
+    local result = "["
+    local first = true
+    
+    for i = 1, #commandList do
+        if (not first) then
+            result = result .. ","
+        end
+        first = false
+        result = result .. SerializeCommand(commandList[i])
+    end
+    
+    result = result .. "]"
+    return result
+}
+
+function DeserializeCommands(jsonString)
+{
+    local commands = DeserializeFromJSON(jsonString)
+    
+    if (commands == nil or type(commands) ~= "table") then
+        Log("ERROR: Failed to deserialize commands")
+        return {}
+    end
+    
+    return commands
+}
+
+// ============================================
+// File-based Serialization
+// ============================================
+
+function WriteStateToFile(state, filepath)
+{
+    local jsonString = SerializeGameState(state)
+    
+    if (jsonString == nil) then
+        Log("ERROR: Failed to serialize state to JSON")
+        return false
+    end
+    
+    local file = io.open(filepath, "w")
+    if (file == nil) then
+        Log("ERROR: Failed to open file for writing: " .. tostring(filepath))
+        return false
+    end
+    
+    file:write(jsonString)
+    file:close()
+    
+    return true
+}
+
+function ReadStateFromFile(filepath)
+{
+    local file = io.open(filepath, "r")
+    if (file == nil) then
+        Log("WARNING: Failed to open file for reading: " .. tostring(filepath))
+        return nil
+    end
+    
+    local content = file:read("*a")
+    file:close()
+    
+    if (content == nil or content == "") then
+        return nil
+    end
+    
+    return DeserializeGameState(content)
+}
+
+function WriteCommandsToFile(commands, filepath)
+{
+    local jsonString = SerializeCommands(commands)
+    
+    if (jsonString == nil) then
+        Log("ERROR: Failed to serialize commands to JSON")
+        return false
+    end
+    
+    local file = io.open(filepath, "w")
+    if (file == nil) then
+        Log("ERROR: Failed to open command file for writing: " .. tostring(filepath))
+        return false
+    end
+    
+    file:write(jsonString)
+    file:close()
+    
+    return true
+}
+
+function ReadCommandsFromFile(filepath)
+{
+    local file = io.open(filepath, "r")
+    if (file == nil) then
+        Log("WARNING: Failed to open command file for reading: " .. tostring(filepath))
+        return {}
+    end
+    
+    local content = file:read("*a")
+    file:close()
+    
+    if (content == nil or content == "") then
+        return {}
+    end
+    
+    return DeserializeCommands(content)
+}
+
+// ============================================
+// Validation Functions
+// ============================================
+
+function ValidateStateForSerialization(state)
+{
+    if (state == nil) then
+        Log("ERROR: State is nil")
+        return false
+    end
+    
+    if (type(state) ~= "table") then
+        Log("ERROR: State must be a table")
+        return false
+    end
+    
+    -- Check required fields
+    if (state.version == nil or state.player_id == nil) then
+        Log("ERROR: State missing required fields")
+        return false
+    end
+    
+    return true
+}
+
+function ValidateCommandForSerialization(command)
+{
+    if (command == nil) then
+        Log("ERROR: Command is nil")
+        return false
+    end
+    
+    if (type(command) ~= "table") then
+        Log("ERROR: Command must be a table")
+        return false
+    end
+    
+    if (command.command == nil) then
+        Log("ERROR: Command missing 'command' field")
+        return false
+    end
+    
+    return true
+}
+
+// ============================================
+// Performance Optimization
+// ============================================
+
+local serializationCache = {}
+local maxCacheSize = 50
+local cacheHits = 0
+local cacheMisses = 0
+
+function GetCachedSerialization(state)
+{
+    local stateString = SerializeToJSONFallback(state)
+    
+    if (serializationCache[stateString] ~= nil) then
+        cacheHits = cacheHits + 1
+        return serializationCache[stateString]
+    end
+    
+    cacheMisses = cacheMisses + 1
+    local jsonString = SerializeGameState(state)
+    
+    -- Cache the result
+    if (#serializationCache >= maxCacheSize) then
+        -- Simple cache eviction: remove oldest entry
+        for k, _ in pairs(serializationCache) do
+            serializationCache[k] = nil
+            break
+        end
+    end
+    
+    serializationCache[stateString] = jsonString
+    return jsonString
+}
+
+function GetSerializationStats()
+{
+    return {
+        cache_hits = cacheHits,
+        cache_misses = cacheMisses,
+        cache_size = #serializationCache,
+        hit_rate = cacheHits / (cacheHits + cacheMisses) * 100
+    }
+}
+
+function ClearSerializationCache()
+{
+    serializationCache = {}
+    cacheHits = 0
+    cacheMisses = 0
+}
+
+// ============================================
+// Initialization
+// ============================================
+
+function InitializeSerializer()
+{
+    Log("Initializing JSON serializer")
+    
+    -- Test serialization
+    local testState = {
+        version = "1.0",
+        player_id = 1,
+        timestamp = GetTimestamp(),
+        game_time = 0,
+        resources = {
+            manpower = {current = 100, income = 5, max = 1000},
+            fuel = {current = 50, income = 2, max = 800}
+        }
+    }
+    
+    local jsonString = SerializeGameState(testState)
+    if (jsonString == nil) then
+        Log("ERROR: Failed to serialize test state")
+        return false
+    end
+    
+    -- Test deserialization
+    local deserialized = DeserializeGameState(jsonString)
+    if (deserialized == nil) then
+        Log("ERROR: Failed to deserialize test state")
+        return false
+    end
+    
+    Log("JSON serializer initialized successfully")
+    return true
+}
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function PrettyPrintJSON(data)
+{
+    return SerializeToJSON(data, true)
+}
+
+function GetJSONSize(jsonString)
+{
+    if (jsonString == nil) then
+        return 0
+    end
+    return string.len(jsonString)
+}
+
+function OptimizeJSONForTransmission(jsonString)
+{
+    -- Remove all whitespace for maximum compactness
+    local optimized = string.gsub(jsonString, "%s", "")
+    return optimized
+}

@@ -51,23 +51,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `StateLogger` class for game state snapshots
     - `LogParser` class for post-match analysis
     - `LogRotator` for automatic log file management
-  - `python/scheduler.py` - Tick schedulers for decision-making
-    - `StrategicTickScheduler` for macro-level decisions (10s interval)
-    - `FastTickScheduler` for reflex layer updates (500ms interval)
-    - `SchedulerManager` for coordinating multiple schedulers
-    - Full threading support and statistics tracking
   - `python/ipc_fallback.py` - Fallback IPC methods
     - `SharedMemoryIPC` - Memory-mapped file communication
     - `ConsoleLogRelayIPC` - Console/log file relay approach
     - `FallbackIPCManager` - Automatic fallback handling
+- **Orchestrator Package** (`python/orchestrator/`) - New package structure for Phase 1
+  - `python/orchestrator/__init__.py` - Package initialization with exports
+  - `python/orchestrator/main.py` - Main orchestrator service (moved from root)
+  - `python/orchestrator/scheduler.py` - Tick schedulers (moved from root python/scheduler.py)
+    - `StrategicTickScheduler` for macro-level decisions (10s interval)
+    - `FastTickScheduler` for reflex layer updates (500ms interval)
+    - `SchedulerManager` for coordinating multiple schedulers
+    - Full threading support and statistics tracking
+  - `python/orchestrator/state_manager.py` - Game state management
+    - State collection, processing, and storage
+    - Historical state tracking and validation
+  - `python/orchestrator/command_processor.py` - Command processing
+    - Command queue with priority levels (URGENT, HIGH, NORMAL, LOW)
+    - Command validation, execution, and history tracking
+    - Convenience functions for common command types
 - **New Test Files**
   - `tests/__init__.py` - Test package initialization
   - `tests/unit/test_logger.py` - Unit tests for logger module
   - `tests/unit/test_scheduler.py` - Unit tests for scheduler module
   - `tests/unit/test_schema.py` - Unit tests for schema validation
+  - `tests/unit/test_scheduler.py` - Updated import to use `orchestrator.scheduler`
   - `tests/performance/` - Performance test directory
 - **Build Scripts**
-  - `package_mod.bat` - Mod packaging script for creating .sga files
+  - `package_mod.bat` - Updated to include `scar/serializer.scar` in packaging
   - `run_mod.bat` - Convenience script for running the mod
 
 ### Changed
@@ -80,6 +91,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prioritizes CoH1 base directory where SCAR writes files
   - Fallback to mod directory and Steam paths for flexibility
 - **IPC Reader** (`python/ipc_reader.py`) - Enhanced with robust path resolution
+- **SCAR Serializer** (`scar/serializer.scar`) - JSON serialization for SCAR
+  - `SerializeToJSON()` and `DeserializeFromJSON()` functions
+  - Game state and command serialization
+  - Compact serialization for performance optimization
+  - Fallback serialization for environments without native JSON support
+  - File-based serialization helpers
+  - Validation functions for state and command data
+- **SCAR Main** (`scar/main.scar`) - Enhanced with serializer integration
+  - Added `include("scar/serializer.scar")` for JSON serialization
+  - Added debug logging for mod lifecycle events
+- **SCAR State Collector** (`scar/state_collector.scar`) - Updated to use serializer module
+  - `SerializeGameState()` now uses `SerializeToJSON()` from serializer module
+  - Improved fallback chain for JSON encoding
+- **Reorganization Documentation** (`ORCHESTRATOR_REORG_SUMMARY.md`) - Complete summary of package restructuring
   - Multiple data directory checking with automatic fallback
   - Better error handling and logging for file operations
   - Dynamic file path resolution based on actual file locations
@@ -88,6 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `SchedulerManager` with strategic (10s) and fast (500ms) tick schedulers
   - Callback handlers for strategic and fast tick events
   - Proper lifecycle management for all components
+- **Main Entry Point** (`python/main.py`) - Refactored as thin wrapper
+  - Now delegates to `orchestrator.main` module
+  - Maintains backward compatibility for direct execution
+  - Simplified to ~34 lines from ~320 lines
 
 ### Fixed
 - **Placeholder Functions** - Replaced all placeholder data collection functions with real SCAR API calls

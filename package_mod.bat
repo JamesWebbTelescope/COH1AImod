@@ -30,6 +30,7 @@ REM Copy SCAR files to temp directory (they should be at the root of the .sga)
 copy scar\config.scar "%TEMP_DIR%\" >nul
 copy scar\ipc.scar "%TEMP_DIR%\" >nul
 copy scar\main.scar "%TEMP_DIR%\" >nul
+copy scar\serializer.scar "%TEMP_DIR%\" >nul
 copy scar\state_collector.scar "%TEMP_DIR%\" >nul
 
 REM Create mod.ini file (optional)
@@ -45,8 +46,8 @@ REM Create mod.ini file (optional)
 REM Package using 7-Zip if available
 if exist "C:\Program Files\7-Zip\7z.exe" (
     "C:\Program Files\7-Zip\7z.exe" a -tzip "%SGA_FILE%" "%TEMP_DIR%\*" -mx=1 >nul
-) else if exist "C:\Program Files (x86)\.7-Zip\7z.exe" (
-    "C:\Program Files (x86)\.7-Zip\7z.exe" a -tzip "%SGA_FILE%" "%TEMP_DIR%\*" -mx=1 >nul
+) else if exist "C:\Program Files (x86)\7-Zip\7z.exe" (
+    "C:\Program Files (x86)\7-Zip\7z.exe" a -tzip "%SGA_FILE%" "%TEMP_DIR%\*" -mx=1 >nul
 ) else (
     REM Use PowerShell
     powershell -command "& {Compress-Archive -Path '%TEMP_DIR%\*' -DestinationPath '%SGA_FILE%' -CompressionLevel Optimal}" >nul 2>&1

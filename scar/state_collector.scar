@@ -651,12 +651,17 @@ function CollectGameState()
 
 function SerializeGameState(state)
 {
-    // Use SCAR's JSON encoder if available
+    -- Use the serializer module if available
+    if (SerializeToJSON ~= nil) then
+        return SerializeToJSON(state)
+    end
+    
+    // Fallback: Use SCAR's JSON encoder if available
     if (json ~= null) {
         return json.encode(state)
     }
     
-    // Fallback: simple serialization
+    // Final fallback: simple serialization
     Log("WARNING: JSON encoder not available, using basic serialization")
     return "{}"  // Placeholder - in practice, use a proper JSON library
 }

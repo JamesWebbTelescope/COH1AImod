@@ -2,10 +2,11 @@
 CoH1 × Mistral AI Mod - Scheduler Module
 
 Provides tick schedulers for strategic and fast decision-making cycles.
+This version is specifically for the orchestrator package.
 
 Author: Generated via planner skill
 Version: 0.1.0
-Date: 2026-10-10
+Date: 2026-10-11
 """
 
 import threading

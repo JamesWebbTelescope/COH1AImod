@@ -38,6 +38,7 @@ constant IPC_UPDATE_INTERVAL = 0.05
 
 -- Include all required modules
 include("scar/state_collector.scar")
+include("scar/serializer.scar")
 include("scar/ipc.scar")
 
 // ============================================
@@ -122,6 +123,7 @@ function OnGameUpdate(deltaTime)
         lastUpdateTime = currentTime
         
         local ipcUpdated = UpdateIPC(deltaTime)
+        Log("Runtime:" lastUpdateTime)
         
         if (ipcUpdated) {
             -- IPC activity occurred
@@ -433,8 +435,10 @@ function OnScriptLoad()
     -- Register for game events
     if (ebx ~= null) then
         -- Try to register for game start event
+        Log("Mod started")
         if (ebx.Game ~= null and ebx.Game.AddOnGameStartCallback ~= null) then
             ebx:Game.AddOnGameStartCallback(OnGameStart)
+            Log("OnGameStart function called")
         end
         
         -- Register for game update

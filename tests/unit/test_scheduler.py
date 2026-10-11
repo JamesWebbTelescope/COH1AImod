@@ -13,7 +13,7 @@ import sys
 # Add parent directory to Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
-from scheduler import (
+from orchestrator.scheduler import (
     SchedulerState, SchedulerStats, BaseTickScheduler,
     StrategicTickScheduler, FastTickScheduler, SchedulerManager,
     create_schedulers
