@@ -40,6 +40,7 @@ constant IPC_UPDATE_INTERVAL = 0.05
 include("scar/state_collector.scar")
 include("scar/serializer.scar")
 include("scar/ipc.scar")
+include("scar/reflex_layer.scar")
 
 // ============================================
 // Global State
@@ -144,58 +145,8 @@ function OnGameUpdate(deltaTime)
 
 function UpdateReflexLayer(deltaTime)
 {
-    -- This would contain the local reflex behaviors that don't require Mistral
-    -- For now, this is a placeholder for future implementation
-    
-    -- In Phase 2, this would include:
-    -- - Retreat low-health squads under fire
-    -- - Respond to artillery
-    -- - Basic capture micro
-    -- - Keep build queues non-empty
-    
-    -- For now, just update statistics
-    local player = GetLocalPlayer()
-    if (IsValidPlayer(player)) then
-        local squads = player:GetSquads()
-        if (squads ~= null) then
-            for i = 1, #squads do
-                local squad = squads[i]
-                if (squad ~= null) then
-                    -- Check for low health squads
-                    local health = squad:GetHealth()
-                    if (health.current > 0 and health.max > 0) then
-                        local healthPercent = health.current / health.max
-                        
-                        -- Low health retreat (configured threshold)
-                        if (healthPercent <= RETREAT_HEALTH_THRESHOLD) then
-                            if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
-                                Log(string.format("Reflex: Squad %d at %.1f%% health - consider retreat", 
-                                    squad:GetId(), healthPercent * 100))
-                            end
-                            
-                            -- Execute retreat if under fire
-                            if (squad:UnderFire()) then
-                                squad:Retreat()
-                                if (ShouldLog(DEBUG_LEVEL_INFO)) then
-                                    Log(string.format("Reflex: Squad %d retreated due to low health and under fire", 
-                                        squad:GetId()))
-                                end
-                            end
-                        end
-                        
-                        -- Critical health retreat
-                        if (healthPercent <= CRITICAL_HEALTH_THRESHOLD) then
-                            squad:Retreat()
-                            if (ShouldLog(DEBUG_LEVEL_INFO)) then
-                                Log(string.format("Reflex: Squad %d critically low health - FORCED RETREAT", 
-                                    squad:GetId()))
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+    -- Call the comprehensive reflex layer implementation
+    UpdateReflexLayerImpl(deltaTime)
 }
 
 // ============================================

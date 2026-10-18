@@ -23,7 +23,12 @@ try:
     from .schema import GameState
 except ImportError:
     # For direct execution or testing
-    pass
+    try:
+        from config import get_config
+        from schema import GameState
+    except ImportError:
+        # Define minimal GameState for type hints if imports fail
+        GameState = Any
 
 
 @dataclass

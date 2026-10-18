@@ -1,0 +1,1615 @@
+// ============================================
+// CoH1 × Mistral AI Mod - Reflex Layer
+// ============================================
+//
+// Local heuristics that must never wait for cloud model calls.
+// Implements autonomous reflex behaviors for urgent, time-sensitive decisions.
+//
+// Features:
+// - Retreat low-health squads under fire
+// - Respond to artillery fire
+// - Basic capture point micro-management
+// - Keep build queues non-empty
+//
+// Author: Generated via developer skill
+// Version: 1.0.0
+// Date: 2026-10-18
+//
+// Documentation: https://scardoc.coh.fi/
+// ============================================
+
+// ============================================
+// Configuration - Matches config.scar constants
+// ============================================
+
+-- Include configuration
+include("scar/config.scar")
+
+-- Reflex-specific configuration
+constant REXLEX_UPDATE_INTERVAL = 0.1  // Seconds between reflex checks
+constant ARTILLERY_RESPONSE_DISTANCE = 50.0  // Distance to respond to artillery
+constant CAPTURE_POINT_SEARCH_RADIUS = 100.0  // Search radius for capture points
+constant MAX_RETREAT_DISTANCE = 200.0  // Maximum retreat distance
+constant MIN_RETREAT_DISTANCE = 50.0  // Minimum retreat distance
+
+-- Reflex priority levels (higher = more urgent)
+constant REXLEX_PRIORITY_CRITICAL = 4  // Must execute immediately
+constant REXLEX_PRIORITY_HIGH = 3     // Should execute soon
+constant REXLEX_PRIORITY_NORMAL = 2  // Normal priority
+constant REXLEX_PRIORITY_LOW = 1      // Can wait
+
+-- Reflex behavior flags (can be toggled via config)
+local reflexRetreatEnabled = true
+local reflexArtilleryResponseEnabled = true
+local reflexCaptureMicroEnabled = true
+local reflexBuildQueueEnabled = true
+
+-- ============================================
+// Reflex State Tracking
+// ============================================
+
+-- Track which squads have already been ordered to retreat
+local squadRetreatCooldown = {}  -- squad_id -> last_retreat_time
+constant RETREAT_COOLDOWN = 5.0  -- Seconds before same squad can retreat again
+
+-- Track artillery warnings
+local artilleryWarningTimes = {}  -- position_key -> last_warning_time
+constant ARTILLERY_WARNING_COOLDOWN = 3.0  -- Seconds between artillery warnings
+
+-- Track capture point assignments
+local capturePointAssignments = {}  -- cp_id -> squad_id
+constant CAPTURE_REASSIGN_INTERVAL = 10.0  -- Seconds before reassigning capture
+
+-- Track build queue state
+local lastBuildQueueCheck = 0
+constant BUILD_QUEUE_CHECK_INTERVAL = 2.0  // Seconds between build queue checks
+
+-- Track last retreat position for each squad
+local lastRetreatPositions = {}  -- squad_id -> {x, y, z}
+
+-- ============================================
+// Reflex Event Tracking
+// ============================================
+
+-- Statistics tracking
+local reflexStats = {
+    retreats_triggered = 0,
+    artillery_responses = 0,
+    capture_points_captured = 0,
+    capture_points_defended = 0,
+    build_queue_fills = 0,
+    squads_saved = 0,
+    last_reflex_time = 0,
+    total_reflex_calls = 0
+}
+
+-- ============================================
+// Initialization
+// ============================================
+
+function InitializeReflexLayer()
+{
+    Log("Initializing Reflex Layer")
+    
+    -- Reset state tracking
+    squadRetreatCooldown = {}
+    artilleryWarningTimes = {}
+    capturePointAssignments = {}
+    lastRetreatPositions = {}
+    
+    -- Reset statistics
+    reflexStats = {
+        retreats_triggered = 0,
+        artillery_responses = 0,
+        capture_points_captured = 0,
+        capture_points_defended = 0,
+        build_queue_fills = 0,
+        squads_saved = 0,
+        last_reflex_time = GetTimestamp(),
+        total_reflex_calls = 0
+    }
+    
+    -- Enable all reflex behaviors by default
+    reflexRetreatEnabled = true
+    reflexArtilleryResponseEnabled = true
+    reflexCaptureMicroEnabled = true
+    reflexBuildQueueEnabled = true
+    
+    Log("Reflex Layer initialized successfully")
+    return true
+}
+
+-- ============================================
+-- Enable/Disable Reflex Behaviors
+-- ============================================
+
+function EnableReflexRetreat(enable)
+{
+    reflexRetreatEnabled = enable
+    Log("Reflex retreat " .. (enable and "ENABLED" or "DISABLED"))
+end
+
+function EnableReflexArtilleryResponse(enable)
+{
+    reflexArtilleryResponseEnabled = enable
+    Log("Reflex artillery response " .. (enable and "ENABLED" or "DISABLED"))
+end
+
+function EnableReflexCaptureMicro(enable)
+{
+    reflexCaptureMicroEnabled = enable
+    Log("Reflex capture micro " .. (enable and "ENABLED" or "DISABLED"))
+end
+
+function EnableReflexBuildQueue(enable)
+{
+    reflexBuildQueueEnabled = enable
+    Log("Reflex build queue " .. (enable and "ENABLED" or "DISABLED"))
+end
+
+-- ============================================
+-- Main Reflex Update Function
+-- ============================================
+
+local lastReflexUpdate = 0
+
+function UpdateReflexLayerImpl(deltaTime)
+{
+    local currentTime = GetTimestamp()
+    
+    -- Rate limiting: only update at configured interval
+    if (currentTime - lastReflexUpdate < REXLEX_UPDATE_INTERVAL) then
+        return
+    end
+    
+    lastReflexUpdate = currentTime
+    reflexStats.total_reflex_calls = reflexStats.total_reflex_calls + 1
+    reflexStats.last_reflex_time = currentTime
+    
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log("Reflex: No valid local player, skipping")
+        end
+        return
+    end
+    
+    -- Get current game state
+    local squads = player:GetSquads()
+    local buildings = player:GetBuildings()
+    local resources = player:GetResources()
+    
+    if (squads == null) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log("Reflex: No squads found, skipping")
+        end
+        return
+    end
+    
+    -- Process reflex behaviors in priority order
+    -- Priority 1: Critical health situations (CRITICAL)
+    ProcessCriticalRetreats(squads)
+    
+    -- Priority 2: Artillery response (HIGH)
+    ProcessArtilleryResponse(squads)
+    
+    -- Priority 3: Capture point micro (NORMAL)
+    ProcessCapturePointMicro(player, squads)
+    
+    -- Priority 4: Build queue management (LOW)
+    ProcessBuildQueueManagement(player, buildings, resources)
+    
+    -- Clean up old state
+    CleanupReflexState(currentTime)
+}
+
+-- ============================================
+-- 1. Retreat Low-Health Squads (CRITICAL PRIORITY)
+-- ============================================
+
+function ProcessCriticalRetreats(squads)
+{
+    if (!reflexRetreatEnabled) then return end
+    
+    local currentTime = GetTimestamp()
+    local criticalRetreats = 0
+    local urgentRetreats = 0
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad == null or !squad:IsValid()) then goto continue end
+        
+        local squadId = squad:GetId()
+        local healthInfo = GetSquadHealthInfo(squad)
+        
+        -- Skip if on cooldown
+        if (squadRetreatCooldown[squadId] ~= null) then
+            if (currentTime - squadRetreatCooldown[squadId] < RETREAT_COOLDOWN) then
+                goto continue
+            end
+        end
+        
+        -- CRITICAL: Very low health - force retreat regardless of combat state
+        if (healthInfo.healthPercent <= CRITICAL_HEALTH_THRESHOLD) then
+            local success = ExecuteSquadRetreat(squad, "CRITICAL_HEALTH")
+            if (success) then
+                squadRetreatCooldown[squadId] = currentTime
+                reflexStats.retreats_triggered = reflexStats.retreats_triggered + 1
+                reflexStats.squads_saved = reflexStats.squads_saved + 1
+                criticalRetreats = criticalRetreats + 1
+            end
+            goto continue
+        end
+        
+        -- HIGH: Low health and under fire - retreat immediately
+        if (healthInfo.healthPercent <= RETREAT_HEALTH_THRESHOLD) then
+            if (squad:UnderFire() or squad:IsSuppressed() or squad:IsPinned()) then
+                local success = ExecuteSquadRetreat(squad, "LOW_HEALTH_UNDER_FIRE")
+                if (success) then
+                    squadRetreatCooldown[squadId] = currentTime
+                    reflexStats.retreats_triggered = reflexStats.retreats_triggered + 1
+                    reflexStats.squads_saved = reflexStats.squads_saved + 1
+                    urgentRetreats = urgentRetreats + 1
+                end
+            end
+        end
+        
+        ::continue::
+    end
+    
+    if (criticalRetreats > 0 and ShouldLog(DEBUG_LEVEL_INFO)) then
+        Log(string.format("Reflex: %d critical health retreats executed", criticalRetreats))
+    end
+    
+    if (urgentRetreats > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: %d urgent retreats executed (low health + under fire)", urgentRetreats))
+    end
+}
+
+function GetSquadHealthInfo(squad)
+{
+    local health = squad:GetHealth()
+    local maxHealth = squad:GetMaxHealth()
+    
+    local healthPercent = 1.0
+    if (maxHealth > 0) then
+        healthPercent = health / maxHealth
+    end
+    
+    return {
+        current = health,
+        max = maxHealth,
+        healthPercent = healthPercent,
+        underFire = squad:UnderFire(),
+        suppressed = squad:IsSuppressed(),
+        pinned = squad:IsPinned()
+    }
+}
+
+function ExecuteSquadRetreat(squad, reason)
+{
+    local squadId = squad:GetId()
+    local position = squad:GetPosition()
+    
+    -- Find a safe retreat position
+    local retreatPos = FindRetreatPosition(squad, position)
+    
+    if (retreatPos == null) then
+        -- Fallback: retreat in place
+        Log(string.format("Reflex: Squad %d - %s, retreating in place (no safe position found)", 
+            squadId, reason))
+        squad:Retreat()
+        lastRetreatPositions[squadId] = {position.x, position.y, position.z}
+        return true
+    end
+    
+    -- Move to retreat position
+    Log(string.format("Reflex: Squad %d - %s, retreating to (%.1f, %.1f, %.1f)", 
+        squadId, reason, retreatPos.x, retreatPos.y, retreatPos.z))
+    
+    squad:Move(retreatPos.x, retreatPos.y, retreatPos.z)
+    squad:Retreat()  -- Also issue retreat command for extra safety
+    
+    lastRetreatPositions[squadId] = {retreatPos.x, retreatPos.y, retreatPos.z}
+    return true
+}
+
+function FindRetreatPosition(squad, currentPos)
+{
+    -- Try to find a position away from danger
+    -- Strategy 1: Move away from nearest enemy
+    -- Strategy 2: Move to cover
+    -- Strategy 3: Move back from current facing
+    
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then return null end
+    
+    -- Strategy 1: Find nearest visible enemy and move away
+    local nearestEnemy, enemyDistance = FindNearestVisibleEnemy(squad)
+    if (nearestEnemy ~= null and enemyDistance < 100.0) then
+        -- Move away from enemy
+        local direction = NormalizeVector(
+            currentPos.x - nearestEnemy.position.x,
+            currentPos.y - nearestEnemy.position.y,
+            currentPos.z - nearestEnemy.position.z
+        )
+        
+        local retreatDistance = math.min(MAX_RETREAT_DISTANCE, enemyDistance * 1.5)
+        retreatDistance = math.max(retreatDistance, MIN_RETREAT_DISTANCE)
+        
+        local retreatPos = {
+            x = currentPos.x + direction.x * retreatDistance,
+            y = currentPos.y + direction.y * retreatDistance,
+            z = currentPos.z
+        }
+        
+        -- Validate position is on map and pathable
+        if (IsPositionValid(retreatPos)) then
+            return retreatPos
+        end
+    end
+    
+    -- Strategy 2: Move in direction away from squad's current facing
+    local facing = squad:GetFacing()
+    if (facing ~= null) then
+        local retreatDistance = 100.0
+        local retreatPos = {
+            x = currentPos.x - facing.x * retreatDistance,
+            y = currentPos.y - facing.y * retreatDistance,
+            z = currentPos.z
+        }
+        
+        if (IsPositionValid(retreatPos)) then
+            return retreatPos
+        end
+    end
+    
+    -- Strategy 3: Move to player base position (fallback)
+    local basePos = GetPlayerBasePosition(player)
+    if (basePos ~= null) then
+        -- Move towards but not to base
+        local direction = NormalizeVector(
+            basePos.x - currentPos.x,
+            basePos.y - currentPos.y,
+            basePos.z - currentPos.z
+        )
+        
+        local retreatPos = {
+            x = currentPos.x + direction.x * MIN_RETREAT_DISTANCE * 0.5,
+            y = currentPos.y + direction.y * MIN_RETREAT_DISTANCE * 0.5,
+            z = currentPos.z
+        }
+        
+        if (IsPositionValid(retreatPos)) then
+            return retreatPos
+        end
+    end
+    
+    -- No safe position found
+    return null
+}
+
+function FindNearestVisibleEnemy(squad)
+{
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then return null, 0 end
+    
+    local minDistance = math.huge
+    local nearestEnemy = null
+    local squadPos = squad:GetPosition()
+    
+    -- Get visible enemy units
+    local visibleEnemies = ebx:Game.GetVisibleEnemies(player)
+    if (visibleEnemies == null or #visibleEnemies == 0) then
+        return null, minDistance
+    end
+    
+    for i = 1, #visibleEnemies do
+        local enemy = visibleEnemies[i]
+        if (enemy == null or !enemy:IsValid()) then goto continue end
+        
+        local enemyPos = enemy:GetPosition()
+        local distance = CalculateDistance(squadPos, enemyPos)
+        
+        if (distance < minDistance) then
+            minDistance = distance
+            nearestEnemy = {
+                id = enemy:GetId(),
+                type = enemy:GetType(),
+                position = enemyPos,
+                distance = distance
+            }
+        end
+        
+        ::continue::
+    end
+    
+    return nearestEnemy, minDistance
+}
+
+function NormalizeVector(x, y, z)
+{
+    local length = math.sqrt(x * x + y * y + z * z)
+    if (length == 0) then
+        return {x = 0, y = 1, z = 0}
+    end
+    
+    return {
+        x = x / length,
+        y = y / length,
+        z = z / length
+    }
+}
+
+function CalculateDistance(pos1, pos2)
+{
+    local dx = pos2.x - pos1.x
+    local dy = pos2.y - pos1.y
+    local dz = pos2.z - pos1.z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+}
+
+function IsPositionValid(pos)
+{
+    -- Check if position is on the map and pathable
+    local map = ebx:Game.GetMap()
+    if (map == null) then return false end
+    
+    -- Check bounds (simplified - actual bounds depend on map)
+    if (pos.x < -10000 or pos.x > 10000) then return false end
+    if (pos.y < -10000 or pos.y > 10000) then return false end
+    
+    -- Check if pathable (simplified)
+    local isPathable = ebx:Game.IsPathable(pos.x, pos.y, pos.z)
+    return isPathable
+}
+
+function GetPlayerBasePosition(player)
+{
+    -- Get the player's base position (e.g., HQ position)
+    local hq = player:GetHeadquarters()
+    if (hq ~= null and hq:IsValid()) then
+        return hq:GetPosition()
+    end
+    
+    -- Fallback: use spawn point
+    return player:GetSpawnPosition()
+}
+
+-- ============================================
+-- 2. Artillery Response (HIGH PRIORITY)
+-- ============================================
+
+function ProcessArtilleryResponse(squads)
+{
+    if (!reflexArtilleryResponseEnabled) then return end
+    
+    local currentTime = GetTimestamp()
+    local artilleryResponses = 0
+    local squadsMoved = 0
+    
+    -- Detect artillery fire on the map
+    local artilleryPositions = DetectArtilleryFire()
+    
+    if (#artilleryPositions == 0) then return end
+    
+    -- For each artillery position, find nearby squads and move them away
+    for i = 1, #artilleryPositions do
+        local artilleryPos = artilleryPositions[i]
+        local posKey = string.format("%.1f,%.1f", artilleryPos.x, artilleryPos.y)
+        
+        -- Rate limit artillery warnings
+        if (artilleryWarningTimes[posKey] ~= null) then
+            if (currentTime - artilleryWarningTimes[posKey] < ARTILLERY_WARNING_COOLDOWN) then
+                goto continue
+            end
+        end
+        
+        artilleryWarningTimes[posKey] = currentTime
+        
+        -- Find squads within response distance
+        for j = 1, #squads do
+            local squad = squads[j]
+            if (squad == null or !squad:IsValid()) then goto squad_continue end
+            
+            local squadPos = squad:GetPosition()
+            local distance = CalculateDistance(squadPos, artilleryPos)
+            
+            -- Only respond if squad is close enough and not already moving away
+            if (distance <= ARTILLERY_RESPONSE_DISTANCE) then
+                local healthInfo = GetSquadHealthInfo(squad)
+                
+                -- Don't move squads that are already at very low health (they should retreat already)
+                if (healthInfo.healthPercent <= RETREAT_HEALTH_THRESHOLD) then
+                    goto squad_continue
+                end
+                
+                -- Move squad away from artillery
+                local success = MoveSquadAwayFromPosition(squad, artilleryPos)
+                if (success) then
+                    artilleryResponses = artilleryResponses + 1
+                    squadsMoved = squadsMoved + 1
+                end
+            end
+            
+            ::squad_continue::
+        end
+        
+        ::continue::
+    end
+    
+    if (artilleryResponses > 0 and ShouldLog(DEBUG_LEVEL_INFO)) then
+        Log(string.format("Reflex: Artillery response - moved %d squads from %d artillery positions", 
+            squadsMoved, #artilleryPositions))
+    end
+    
+    reflexStats.artillery_responses = reflexStats.artillery_responses + artilleryResponses
+}
+
+function DetectArtilleryFire()
+{
+    -- Detect artillery fire using game's projectile system
+    local artilleryPositions = {}
+    
+    local projectiles = ebx:Game.GetProjectiles()
+    if (projectiles == null or #projectiles == 0) then
+        return artilleryPositions
+    end
+    
+    for i = 1, #projectiles do
+        local projectile = projectiles[i]
+        if (projectile == null or !projectile:IsValid()) then goto continue end
+        
+        -- Check if this is an artillery projectile
+        local projType = projectile:GetType()
+        if (IsArtilleryProjectile(projType)) then
+            local impactPos = projectile:GetImpactPosition()
+            if (impactPos ~= null) then
+                table.insert(artilleryPositions, {
+                    x = impactPos.x,
+                    y = impactPos.y,
+                    z = impactPos.z
+                })
+            end
+        end
+        
+        ::continue::
+    end
+    
+    return artilleryPositions
+}
+
+function IsArtilleryProjectile(projectileType)
+{
+    -- Check if projectile is from artillery
+    local artilleryTypes = {
+        "mortar", "howitzer", "artillery", "rocket",
+        "barrage", "shell", "bomb", "airstrike"
+    }
+    
+    local projTypeLower = string.lower(projectileType or "")
+    
+    for i = 1, #artilleryTypes do
+        if (string.find(projTypeLower, artilleryTypes[i]) ~= null) then
+            return true
+        end
+    end
+    
+    return false
+}
+
+function MoveSquadAwayFromPosition(squad, avoidPos)
+{
+    local squadId = squad:GetId()
+    local currentPos = squad:GetPosition()
+    
+    -- Calculate direction away from artillery
+    local direction = NormalizeVector(
+        currentPos.x - avoidPos.x,
+        currentPos.y - avoidPos.y,
+        currentPos.z - avoidPos.z
+    )
+    
+    -- Move a reasonable distance away
+    local moveDistance = 100.0
+    local newPos = {
+        x = currentPos.x + direction.x * moveDistance,
+        y = currentPos.y + direction.y * moveDistance,
+        z = currentPos.z
+    }
+    
+    -- Validate and execute move
+    if (IsPositionValid(newPos)) then
+        Log(string.format("Reflex: Moving squad %d away from artillery to (%.1f, %.1f, %.1f)", 
+            squadId, newPos.x, newPos.y, newPos.z))
+        
+        -- Try to use cover if available
+        local coverPos = FindNearestCover(newPos)
+        if (coverPos ~= null) then
+            newPos = coverPos
+            Log(string.format("Reflex: Using cover at (%.1f, %.1f, %.1f)", 
+                coverPos.x, coverPos.y, coverPos.z))
+        end
+        
+        squad:AttackMove(newPos.x, newPos.y, newPos.z)
+        return true
+    end
+    
+    -- Fallback: just retreat
+    Log(string.format("Reflex: Squad %d could not find safe position, retreating", squadId))
+    squad:Retreat()
+    return true
+}
+
+function FindNearestCover(targetPos)
+{
+    -- Find nearest cover position to the target
+    local map = ebx:Game.GetMap()
+    if (map == null) then return null end
+    
+    local coverPositions = ebx:Game.GetCoverPositions(targetPos.x, targetPos.y, targetPos.z, 50.0)
+    if (coverPositions == null or #coverPositions == 0) then
+        return null
+    end
+    
+    -- Find closest cover position
+    local minDistance = math.huge
+    local nearestCover = null
+    
+    for i = 1, #coverPositions do
+        local coverPos = coverPositions[i]
+        local distance = CalculateDistance(targetPos, coverPos)
+        
+        if (distance < minDistance) then
+            minDistance = distance
+            nearestCover = coverPos
+        end
+    end
+    
+    return nearestCover
+}
+
+-- ============================================
+-- 3. Capture Point Micro (NORMAL PRIORITY)
+-- ============================================
+
+function ProcessCapturePointMicro(player, squads)
+{
+    if (!reflexCaptureMicroEnabled) then return end
+    
+    local currentTime = GetTimestamp()
+    local cpsCaptured = 0
+    local cpsDefended = 0
+    
+    -- Get all capture points on the map
+    local map = ebx:Game.GetMap()
+    if (map == null) then return end
+    
+    local capturePoints = map:GetCapturePoints()
+    if (capturePoints == null or #capturePoints == 0) then return end
+    
+    -- Process each capture point
+    for i = 1, #capturePoints do
+        local cp = capturePoints[i]
+        if (cp == null or !cp:IsValid()) then goto cp_continue end
+        
+        local cpId = cp:GetId()
+        local cpPos = cp:GetPosition()
+        local owner = cp:GetOwner()
+        local isNeutral = (owner == null or owner == 0)
+        local captureProgress = cp:GetCaptureProgress()
+        local isContested = cp:IsContested()
+        
+        -- Check if already assigned to a squad
+        local assignedSquadId = capturePointAssignments[cpId]
+        local assignedSquad = null
+        
+        if (assignedSquadId ~= null) then
+            assignedSquad = GetSquadById(assignedSquadId)
+        end
+        
+        -- If assigned squad is invalid or dead, unassign
+        if (assignedSquad == null or !assignedSquad:IsValid()) then
+            capturePointAssignments[cpId] = nil
+            assignedSquad = null
+        end
+        
+        -- Priority 1: Defend our capture points that are under attack
+        if (owner == player:GetId() and isContested) then
+            -- Our CP is being contested, send reinforcement
+            local success = ReinforceCapturePoint(player, cp, squads, currentTime)
+            if (success) then
+                cpsDefended = cpsDefended + 1
+                reflexStats.capture_points_defended = reflexStats.capture_points_defended + 1
+            end
+            goto cp_continue
+        end
+        
+        -- Priority 2: Capture neutral points
+        if (isNeutral) then
+            -- Try to capture with available squad
+            local success = CaptureNeutralPoint(player, cp, squads, currentTime)
+            if (success) then
+                cpsCaptured = cpsCaptured + 1
+                reflexStats.capture_points_captured = reflexStats.capture_points_captured + 1
+            end
+            goto cp_continue
+        end
+        
+        -- Priority 3: Re-capture lost points (low priority for reflex layer)
+        -- This is handled by the strategist in Phase 3, not reflex
+        
+        ::cp_continue::
+    end
+    
+    if (cpsCaptured > 0 and ShouldLog(DEBUG_LEVEL_INFO)) then
+        Log(string.format("Reflex: Captured %d neutral capture points", cpsCaptured))
+    end
+    
+    if (cpsDefended > 0 and ShouldLog(DEBUG_LEVEL_INFO)) then
+        Log(string.format("Reflex: Defended %d contested capture points", cpsDefended))
+    end
+}
+
+function CaptureNeutralPoint(player, cp, squads, currentTime)
+{
+    local cpId = cp:GetId()
+    local cpPos = cp:GetPosition()
+    
+    -- Check if already assigned
+    if (capturePointAssignments[cpId] ~= null) then
+        -- Already have a squad assigned, check progress
+        local assignedSquadId = capturePointAssignments[cpId]
+        local assignedSquad = GetSquadById(assignedSquadId)
+        
+        if (assignedSquad ~= null and assignedSquad:IsValid()) then
+            -- Check if squad is making progress
+            if (IsSquadCapturing(assignedSquad, cp)) then
+                return false  -- Already capturing
+            end
+        end
+        
+        -- Reassign if current assignment is not working
+        capturePointAssignments[cpId] = nil
+    end
+    
+    -- Find best squad to capture this point
+    local bestSquad = FindBestSquadForCapture(player, cp, squads, currentTime)
+    
+    if (bestSquad == null) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log(string.format("Reflex: No suitable squad found to capture CP %d", cpId))
+        end
+        return false
+    end
+    
+    -- Assign squad to capture point
+    local squadId = bestSquad:GetId()
+    capturePointAssignments[cpId] = squadId
+    
+    -- Order squad to capture
+    Log(string.format("Reflex: Squad %d assigned to capture point %d at (%.1f, %.1f, %.1f)", 
+        squadId, cpId, cpPos.x, cpPos.y, cpPos.z))
+    
+    bestSquad:Capture(cp)
+    
+    return true
+}
+
+function ReinforceCapturePoint(player, cp, squads, currentTime)
+{
+    local cpId = cp:GetId()
+    local cpPos = cp:GetPosition()
+    
+    -- Find if we already have a squad there
+    local defendingSquad = FindDefendingSquad(player, cp, squads)
+    
+    if (defendingSquad ~= null) then
+        -- We have a squad there, check if it needs help
+        local healthInfo = GetSquadHealthInfo(defendingSquad)
+        
+        -- If defending squad is at low health, send reinforcement
+        if (healthInfo.healthPercent <= RETREAT_HEALTH_THRESHOLD) then
+            -- Find reinforcement squad
+            local reinforcement = FindBestReinforcementSquad(player, cp, squads, defendingSquad)
+            
+            if (reinforcement ~= null) then
+                local reinfId = reinforcement:GetId()
+                Log(string.format("Reflex: Reinforcing CP %d with squad %d", cpId, reinfId))
+                
+                reinforcement:AttackMove(cpPos.x, cpPos.y, cpPos.z)
+                return true
+            end
+        end
+        
+        return false  -- No reinforcement needed or available
+    end
+    
+    -- No defending squad, try to assign one
+    local bestSquad = FindBestSquadForCapture(player, cp, squads, currentTime)
+    
+    if (bestSquad == null) then
+        return false
+    end
+    
+    -- Assign and send
+    local squadId = bestSquad:GetId()
+    capturePointAssignments[cpId] = squadId
+    
+    Log(string.format("Reflex: Squad %d sent to defend contested CP %d", squadId, cpId))
+    bestSquad:AttackMove(cpPos.x, cpPos.y, cpPos.z)
+    
+    return true
+}
+
+function FindDefendingSquad(player, cp, squads)
+{
+    local cpPos = cp:GetPosition()
+    local playerId = player:GetId()
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad == null or !squad:IsValid()) then goto continue end
+        
+        if (squad:GetOwner() ~= playerId) then goto continue end
+        
+        local squadPos = squad:GetPosition()
+        local distance = CalculateDistance(squadPos, cpPos)
+        
+        -- Squad is near the CP
+        if (distance <= CAPTURE_POINT_SEARCH_RADIUS) then
+            -- Check if squad is actively capturing or defending
+            if (squad:IsCapturing() or squad:IsInCombat()) then
+                return squad
+            end
+        end
+        
+        ::continue::
+    end
+    
+    return null
+}
+
+function FindBestSquadForCapture(player, cp, squads, currentTime)
+{
+    local cpPos = cp:GetPosition()
+    local playerId = player:GetId()
+    
+    local bestSquad = null
+    local bestScore = -math.huge
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad == null or !squad:IsValid()) then goto continue end
+        
+        if (squad:GetOwner() ~= playerId) then goto continue end
+        
+        -- Skip if already assigned to another capture point
+        local squadId = squad:GetId()
+        local alreadyAssigned = false
+        for cpId, assignedSquadId in pairs(capturePointAssignments) do
+            if (assignedSquadId == squadId) then
+                alreadyAssigned = true
+                break
+            end
+        end
+        
+        if (alreadyAssigned) then goto continue end
+        
+        -- Calculate score based on multiple factors
+        local score = CalculateSquadCaptureScore(squad, cp, cpPos, currentTime)
+        
+        if (score > bestScore) then
+            bestScore = score
+            bestSquad = squad
+        end
+        
+        ::continue::
+    end
+    
+    return bestSquad
+}
+
+function CalculateSquadCaptureScore(squad, cp, cpPos, currentTime)
+{
+    local score = 0
+    
+    local squadPos = squad:GetPosition()
+    local distance = CalculateDistance(squadPos, cpPos)
+    local healthInfo = GetSquadHealthInfo(squad)
+    local squadType = squad:GetType()
+    
+    -- Distance factor: closer is better (inverse)
+    if (distance > 0) then
+        score = score + (100 - math.min(distance, 100)) * 2
+    else
+        score = score + 200
+    end
+    
+    -- Health factor: healthier is better
+    score = score + healthInfo.healthPercent * 100
+    
+    -- Type factor: infantry are better at capturing
+    if (IsInfantryType(squadType)) then
+        score = score + 50
+    elseif (IsEngineerType(squadType)) then
+        score = score + 30  -- Engineers can capture but are valuable
+    end
+    
+    -- If squad is already moving towards CP, higher score
+    local squadVelocity = squad:GetVelocity()
+    if (squadVelocity ~= null) then
+        local velocityTowards = VectorDotProduct(
+            squadVelocity,
+            NormalizeVector(cpPos.x - squadPos.x, cpPos.y - squadPos.y, cpPos.z - squadPos.z)
+        )
+        if (velocityTowards > 0) then
+            score = score + 20
+        end
+    end
+    
+    -- Cooldown factor: avoid recently retreated squads
+    local squadId = squad:GetId()
+    if (squadRetreatCooldown[squadId] ~= null) then
+        local timeSinceRetreat = currentTime - squadRetreatCooldown[squadId]
+        if (timeSinceRetreat < RETREAT_COOLDOWN) then
+            score = score - 50  -- Penalty for recently retreated
+        end
+    end
+    
+    return score
+}
+
+function IsInfantryType(squadType)
+{
+    local infantryTypes = {
+        "riflemen", "engineer", "sniper", "machine_gun", "mortar",
+        "bazooka", "grenadier", "assault", "support"
+    }
+    
+    for i = 1, #infantryTypes do
+        if (squadType == infantryTypes[i]) then
+            return true
+        end
+    end
+    
+    return false
+}
+
+function IsEngineerType(squadType)
+{
+    return squadType == "engineer" or squadType == "pioneer"
+}
+
+function FindBestReinforcementSquad(player, cp, squads, defendingSquad)
+{
+    local cpPos = cp:GetPosition()
+    local playerId = player:GetId()
+    local defendingSquadId = defendingSquad:GetId()
+    
+    local bestSquad = null
+    local bestScore = -math.huge
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad == null or !squad:IsValid()) then goto continue end
+        
+        if (squad:GetOwner() ~= playerId) then goto continue end
+        
+        -- Don't select the defending squad itself
+        if (squad:GetId() == defendingSquadId) then goto continue end
+        
+        -- Skip if already assigned to capture point
+        local squadId = squad:GetId()
+        local alreadyAssigned = false
+        for cpId, assignedSquadId in pairs(capturePointAssignments) do
+            if (assignedSquadId == squadId) then
+                alreadyAssigned = true
+                break
+            end
+        end
+        
+        if (alreadyAssigned) then goto continue end
+        
+        local score = CalculateSquadReinforcementScore(squad, cp, cpPos, defendingSquad)
+        
+        if (score > bestScore) then
+            bestScore = score
+            bestSquad = squad
+        end
+        
+        ::continue::
+    end
+    
+    return bestSquad
+}
+
+function CalculateSquadReinforcementScore(squad, cp, cpPos, defendingSquad)
+{
+    local score = 0
+    
+    local squadPos = squad:GetPosition()
+    local distance = CalculateDistance(squadPos, cpPos)
+    local healthInfo = GetSquadHealthInfo(squad)
+    local squadType = squad:GetType()
+    
+    -- Distance factor
+    if (distance > 0) then
+        score = score + (100 - math.min(distance, 100)) * 1.5
+    else
+        score = score + 150
+    end
+    
+    -- Health factor
+    score = score + healthInfo.healthPercent * 80
+    
+    -- Combat effectiveness factor
+    local defendingType = defendingSquad:GetType()
+    local defendingHealth = GetSquadHealthInfo(defendingSquad).healthPercent
+    
+    -- If defending squad is low health, prefer any available squad
+    if (defendingHealth <= RETREAT_HEALTH_THRESHOLD) then
+        score = score + 100
+    end
+    
+    -- Type synergy: prefer infantry to support infantry
+    if (IsInfantryType(squadType) and IsInfantryType(defendingType)) then
+        score = score + 30
+    end
+    
+    return score
+}
+
+function IsSquadCapturing(squad, cp)
+{
+    return squad:IsCapturing(cp)
+}
+
+function VectorDotProduct(v1, v2)
+{
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
+}
+
+-- ============================================
+-- 4. Build Queue Management (LOW PRIORITY)
+-- ============================================
+
+function ProcessBuildQueueManagement(player, buildings, resources)
+{
+    if (!reflexBuildQueueEnabled) then return end
+    
+    local currentTime = GetTimestamp()
+    
+    -- Rate limit build queue checks
+    if (currentTime - lastBuildQueueCheck < BUILD_QUEUE_CHECK_INTERVAL) then
+        return
+    end
+    
+    lastBuildQueueCheck = currentTime
+    local queuesFilled = 0
+    
+    -- Check each building's production queue
+    for i = 1, #buildings do
+        local building = buildings[i]
+        if (building == null or !building:IsValid()) then goto continue end
+        
+        -- Check if this building can produce units
+        if (!CanProduceUnits(building)) then goto continue end
+        
+        -- Check production queue
+        local queue = building:GetProductionQueue()
+        if (queue == null) then goto continue end
+        
+        -- If queue is empty or too small, add something
+        if (#queue <= BUILD_QUEUE_MIN_SIZE) then
+            local success = FillBuildQueue(building, queue, player, resources)
+            if (success) then
+                queuesFilled = queuesFilled + 1
+                reflexStats.build_queue_fills = reflexStats.build_queue_fills + 1
+            end
+        end
+        
+        ::continue::
+    end
+    
+    if (queuesFilled > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: Filled %d empty/inadequate build queues", queuesFilled))
+    end
+}
+
+function CanProduceUnits(building)
+{
+    local buildingType = building:GetType()
+    
+    -- Building types that can produce units
+    local productionBuildings = {
+        "headquarters", "barracks", "weapon_support", "tank_depot",
+        "airfield", "vehicle_depot", "factory"
+    }
+    
+    for i = 1, #productionBuildings do
+        if (buildingType == productionBuildings[i]) then
+            return true
+        end
+    end
+    
+    return false
+}
+
+function FillBuildQueue(building, queue, player, resources)
+{
+    -- Don't fill if we're at population cap
+    local pop = player:GetPopulation()
+    local maxPop = player:GetMaxPopulation()
+    
+    if (pop >= maxPop - MIN_POPULATION_MARGIN) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log("Reflex: Population near cap, not filling build queue")
+        end
+        return false
+    end
+    
+    -- Check if we have resources
+    local mp = resources.manpower.current
+    local fuel = resources.fuel.current
+    local muni = resources.munitions.current
+    
+    if (mp < 50 and fuel < 10 and muni < 10) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log("Reflex: Insufficient resources, not filling build queue")
+        end
+        return false
+    end
+    
+    -- Get available units for this building
+    local availableUnits = GetAvailableProductionUnits(building, player)
+    
+    if (#availableUnits == 0) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log("Reflex: No available units for building type")
+        end
+        return false
+    end
+    
+    -- Select best unit based on current game state
+    local bestUnit = SelectBestProductionUnit(availableUnits, player, resources, building)
+    
+    if (bestUnit == null) then
+        return false
+    end
+    
+    -- Check if we can afford it
+    if (!CanAffordUnit(bestUnit, resources)) then
+        if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+            Log(string.format("Reflex: Cannot afford %s", bestUnit.name))
+        end
+        return false
+    end
+    
+    -- Order production
+    Log(string.format("Reflex: Ordering production of %s at building %d", 
+        bestUnit.name, building:GetId()))
+    
+    building:Produce(bestUnit.type)
+    
+    return true
+}
+
+function GetAvailableProductionUnits(building, player)
+{
+    local buildingType = building:GetType()
+    local faction = player:GetFaction()
+    local techLevel = player:GetTechLevel()
+    
+    local availableUnits = {}
+    
+    -- Define production capabilities per building type
+    local productionRules = {
+        headquarters = {
+            allies = {"engineer", "riflemen", "sniper"},
+            axis = {"pioneer", "volks", "sniper"}
+        },
+        barracks = {
+            allies = {"riflemen", "machine_gun", "mortar", "bazooka"},
+            axis = {"volks", "hmg", "mortar", "panzerschreck"}
+        },
+        weapon_support = {
+            allies = {"machine_gun", "mortar", "bazooka", "sniper"},
+            axis = {"hmg", "mortar", "panzerschreck", "sniper"}
+        },
+        tank_depot = {
+            allies = {"light_tank", "medium_tank", "heavy_tank"},
+            axis = {"light_tank", "medium_tank", "heavy_tank"}
+        }
+    }
+    
+    local rules = productionRules[buildingType]
+    if (rules == null) then return availableUnits end
+    
+    local factionRules = rules[faction]
+    if (factionRules == null) then return availableUnits end
+    
+    -- Filter by tech level
+    for i = 1, #factionRules do
+        local unitType = factionRules[i]
+        local unitTech = GetUnitTechRequirement(unitType, faction)
+        
+        if (unitTech <= techLevel) then
+            table.insert(availableUnits, {
+                type = unitType,
+                name = GetUnitDisplayName(unitType, faction),
+                cost = GetUnitCost(unitType, faction),
+                tech = unitTech,
+                pop_cost = GetUnitPopulationCost(unitType)
+            })
+        end
+    end
+    
+    return availableUnits
+}
+
+function GetUnitTechRequirement(unitType, faction)
+{
+    -- Simplified: most units are tier 1, some are tier 2, few are tier 3
+    local tier2Units = {
+        "mortar", "bazooka", "panzerschreck", "machine_gun", "hmg", "medium_tank"
+    }
+    local tier3Units = {
+        "heavy_tank"
+    }
+    
+    for i = 1, #tier2Units do
+        if (unitType == tier2Units[i]) then
+            return 2
+        end
+    end
+    
+    for i = 1, #tier3Units do
+        if (unitType == tier3Units[i]) then
+            return 3
+        end
+    end
+    
+    return 1
+}
+
+function GetUnitDisplayName(unitType, faction)
+{
+    return unitType  -- Simplified
+}
+
+function GetUnitCost(unitType, faction)
+{
+    -- Return {manpower, fuel, munitions}
+    local costs = {
+        engineer = {50, 0, 0},
+        pioneer = {50, 0, 0},
+        riflemen = {180, 0, 0},
+        volks = {160, 0, 0},
+        sniper = {250, 0, 0},
+        machine_gun = {200, 0, 0},
+        hmg = {200, 0, 0},
+        mortar = {300, 50, 0},
+        bazooka = {220, 0, 0},
+        panzerschreck = {240, 0, 0},
+        light_tank = {400, 100, 0},
+        medium_tank = {600, 200, 0},
+        heavy_tank = {800, 300, 0}
+    }
+    
+    local cost = costs[unitType]
+    if (cost ~= null) then
+        return cost
+    end
+    
+    return {100, 0, 0}  -- Default
+}
+
+function GetUnitPopulationCost(unitType)
+{
+    local popCosts = {
+        engineer = 1,
+        pioneer = 1,
+        riflemen = 3,
+        volks = 3,
+        sniper = 1,
+        machine_gun = 3,
+        hmg = 3,
+        mortar = 4,
+        bazooka = 2,
+        panzerschreck = 2,
+        light_tank = 5,
+        medium_tank = 6,
+        heavy_tank = 8
+    }
+    
+    return popCosts[unitType] or 2  -- Default
+}
+
+function SelectBestProductionUnit(availableUnits, player, resources, building)
+{
+    if (#availableUnits == 0) then return null end
+    
+    local bestUnit = null
+    local bestScore = -math.huge
+    
+    local pop = player:GetPopulation()
+    local maxPop = player:GetMaxPopulation()
+    local popAvailable = maxPop - pop
+    
+    for i = 1, #availableUnits do
+        local unit = availableUnits[i]
+        
+        -- Skip if we can't afford population
+        if (unit.pop_cost > popAvailable - MIN_POPULATION_MARGIN) then
+            goto continue
+        end
+        
+        -- Skip if we can't afford resources
+        if (!CanAffordUnit(unit, resources)) then
+            goto continue
+        end
+        
+        local score = CalculateUnitProductionScore(unit, player, resources, building)
+        
+        if (score > bestScore) then
+            bestScore = score
+            bestUnit = unit
+        end
+        
+        ::continue::
+    end
+    
+    return bestUnit
+}
+
+function CanAffordUnit(unit, resources)
+{
+    local mpCost = unit.cost[1] or 0
+    local fuelCost = unit.cost[2] or 0
+    local muniCost = unit.cost[3] or 0
+    
+    -- Keep some resources in reserve
+    local reserveMp = MIN_RESOURCE_MARGIN
+    local reserveFuel = MIN_RESOURCE_MARGIN / 2
+    local reserveMuni = MIN_RESOURCE_MARGIN / 2
+    
+    return resources.manpower.current >= mpCost + reserveMp and
+           resources.fuel.current >= fuelCost + reserveFuel and
+           resources.munitions.current >= muniCost + reserveMuni
+}
+
+function CalculateUnitProductionScore(unit, player, resources, building)
+{
+    local score = 0
+    
+    -- Population efficiency: prefer units that use population well
+    local popEfficiency = 10 / unit.pop_cost
+    score = score + popEfficiency * 5
+    
+    -- Resource efficiency: prefer cheaper units when resources are low
+    local totalCost = unit.cost[1] + unit.cost[2] + unit.cost[3]
+    local resourceRatio = 1.0 - (totalCost / 1000.0)  -- Normalize
+    score = score + resourceRatio * 10
+    
+    -- Strategic value: some units are more valuable
+    local strategicValues = {
+        engineer = 20,  -- Very valuable for building
+        pioneer = 20,
+        riflemen = 10,
+        volks = 10,
+        machine_gun = 15,
+        hmg = 15,
+        mortar = 20,
+        bazooka = 15,
+        panzerschreck = 15,
+        light_tank = 15,
+        medium_tank = 25,
+        heavy_tank = 30
+    }
+    
+    score = score + (strategicValues[unit.type] or 10)
+    
+    -- Building context: prefer appropriate units for building type
+    local buildingType = building:GetType()
+    if (buildingType == "headquarters" or buildingType == "barracks") then
+        -- Prefer infantry from barracks/HQ
+        if (IsInfantryType(unit.type)) then
+            score = score + 10
+        end
+    elseif (buildingType == "tank_depot" or buildingType == "vehicle_depot") then
+        -- Prefer vehicles from depot
+        if (!IsInfantryType(unit.type) and unit.type ~= "engineer" and unit.type ~= "pioneer") then
+            score = score + 10
+        end
+    end
+    
+    return score
+}
+
+-- ============================================
+-- State Cleanup
+-- ============================================
+
+function CleanupReflexState(currentTime)
+{
+    -- Clean up old retreat cooldowns
+    for squadId, timestamp in pairs(squadRetreatCooldown) do
+        if (currentTime - timestamp > RETREAT_COOLDOWN * 2) then
+            squadRetreatCooldown[squadId] = nil
+        end
+    end
+    
+    -- Clean up old artillery warnings
+    for posKey, timestamp in pairs(artilleryWarningTimes) do
+        if (currentTime - timestamp > ARTILLERY_WARNING_COOLDOWN * 2) then
+            artilleryWarningTimes[posKey] = nil
+        end
+    end
+    
+    -- Clean up old capture point assignments
+    for cpId, squadId in pairs(capturePointAssignments) do
+        -- Check if squad is still valid
+        local squad = GetSquadById(squadId)
+        if (squad == null or !squad:IsValid()) then
+            capturePointAssignments[cpId] = nil
+        end
+    end
+}
+
+-- ============================================
+-- Utility Functions
+-- ============================================
+
+function GetSquadById(squadId)
+{
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then
+        return null
+    end
+    
+    local squads = player:GetSquads()
+    if (squads == null) then
+        return null
+    end
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad ~= null and squad:IsValid() and squad:GetId() == squadId) then
+            return squad
+        end
+    end
+    
+    return null
+}
+
+-- ============================================
+-- Statistics & Debugging
+-- ============================================
+
+function GetReflexStats()
+{
+    return {
+        retreats_triggered = reflexStats.retreats_triggered,
+        artillery_responses = reflexStats.artillery_responses,
+        capture_points_captured = reflexStats.capture_points_captured,
+        capture_points_defended = reflexStats.capture_points_defended,
+        build_queue_fills = reflexStats.build_queue_fills,
+        squads_saved = reflexStats.squads_saved,
+        total_reflex_calls = reflexStats.total_reflex_calls,
+        last_reflex_time = reflexStats.last_reflex_time
+    }
+}
+
+function LogReflexStats()
+{
+    local stats = GetReflexStats()
+    Log("=== Reflex Layer Statistics ===")
+    Log(string.format("Total reflex calls: %d", stats.total_reflex_calls))
+    Log(string.format("Retreats triggered: %d", stats.retreats_triggered))
+    Log(string.format("Squads saved: %d", stats.squads_saved))
+    Log(string.format("Artillery responses: %d", stats.artillery_responses))
+    Log(string.format("Capture points captured: %d", stats.capture_points_captured))
+    Log(string.format("Capture points defended: %d", stats.capture_points_defended))
+    Log(string.format("Build queues filled: %d", stats.build_queue_fills))
+}
+
+function ResetReflexStats()
+{
+    reflexStats = {
+        retreats_triggered = 0,
+        artillery_responses = 0,
+        capture_points_captured = 0,
+        capture_points_defended = 0,
+        build_queue_fills = 0,
+        squads_saved = 0,
+        last_reflex_time = GetTimestamp(),
+        total_reflex_calls = 0
+    }
+}
+
+-- ============================================
+-- Configuration Loading
+-- ============================================
+
+function LoadReflexConfiguration(config)
+{
+    if (config == null) then return end
+    
+    if (config.reflex ~= null) then
+        RETREAT_HEALTH_THRESHOLD = config.reflex.retreat_threshold or RETREAT_HEALTH_THRESHOLD
+        CRITICAL_HEALTH_THRESHOLD = config.reflex.critical_threshold or CRITICAL_HEALTH_THRESHOLD
+        reflexRetreatEnabled = config.reflex.enable_retreat ~= false
+        reflexArtilleryResponseEnabled = config.reflex.enable_artillery_response ~= false
+        reflexCaptureMicroEnabled = config.reflex.enable_capture_micro ~= false
+        reflexBuildQueueEnabled = config.reflex.enable_build_queue ~= false
+    end
+    
+    Log("Reflex configuration loaded")
+}
+
+-- ============================================
+-- Testing Functions
+-- ============================================
+
+function TestReflexLayer()
+{
+    Log("=== Testing Reflex Layer ===")
+    
+    -- Test initialization
+    if (!InitializeReflexLayer()) then
+        Log("ERROR: Failed to initialize reflex layer")
+        return false
+    end
+    
+    -- Create mock squads for testing
+    local mockSquads = {
+        {
+            GetId = function() return 1 end,
+            IsValid = function() return true end,
+            GetHealth = function() return 25 end,
+            GetMaxHealth = function() return 100 end,
+            UnderFire = function() return true end,
+            IsSuppressed = function() return true end,
+            IsPinned = function() return false end,
+            GetPosition = function() return {x = 100, y = 200, z = 0} end,
+            GetType = function() return "riflemen" end,
+            GetFacing = function() return {x = 1, y = 0, z = 0} end,
+            Retreat = function() Log("Test: Squad 1 retreated") return true end,
+            Move = function(x, y, z) Log(string.format("Test: Squad 1 moved to (%.1f, %.1f, %.1f)", x, y, z)) return true end
+        },
+        {
+            GetId = function() return 2 end,
+            IsValid = function() return true end,
+            GetHealth = function() return 80 end,
+            GetMaxHealth = function() return 100 end,
+            UnderFire = function() return false end,
+            IsSuppressed = function() return false end,
+            IsPinned = function() return false end,
+            GetPosition = function() return {x = 150, y = 250, z = 0} end,
+            GetType = function() return "riflemen" end
+        }
+    }
+    
+    -- Test retreat logic
+    Log("Testing retreat logic...")
+    ProcessCriticalRetreats(mockSquads)
+    
+    -- Test statistics
+    LogReflexStats()
+    
+    Log("Reflex Layer tests complete")
+    return true
+}
+
+-- ============================================
+-- Module Initialization
+-- ============================================
+
+-- Initialize reflex layer when this file is loaded
+InitializeReflexLayer()
+
+-- Alias for backward compatibility
+UpdateReflexLayer = UpdateReflexLayerImpl
+
+Log("Reflex Layer module loaded successfully")

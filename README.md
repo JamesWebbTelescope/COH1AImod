@@ -257,7 +257,7 @@ The mod uses a configuration file (`python/coh1ai_data/config.json` or specified
     "data_dir": "coh1ai_data"
   },
   "game": {
-    "faction": "allies",
+    "faction": "axis",
     "difficulty": "normal",
     "player_id": 1
   },
