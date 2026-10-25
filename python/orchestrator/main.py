@@ -22,6 +22,7 @@ Date: 2026-10-11
 """
 
 import argparse
+import json
 import logging
 import signal
 import sys
@@ -274,8 +275,32 @@ class OrchestratorService:
     
     def _generate_mock_data(self):
         """Generate mock game data for testing."""
-        # This would be replaced with actual state file creation in real use
-        pass
+        state = {
+            "version": "1.0",
+            "player_id": 1,
+            "timestamp": time.time(),
+            "game_time": 0.0,
+            "phase": "early",
+            "faction": "allies",
+            "resources": {
+                "manpower": {"current": 500, "income": 10, "max": 1000},
+                "fuel": {"current": 300, "income": 5, "max": 800},
+                "munitions": {"current": 200, "income": 3, "max": 600},
+            },
+            "squads": [],
+            "cps": [],
+            "tech": {},
+        }
+        state_file = self.ipc_reader.state_file
+        temporary_file = state_file.with_name(f"{state_file.name}.tmp")
+
+        try:
+            with temporary_file.open("w", encoding="utf-8") as file:
+                json.dump(state, file, ensure_ascii=False)
+            temporary_file.replace(state_file)
+            self.logger.debug(f"Wrote mock game state to {state_file}")
+        except (OSError, TypeError, ValueError) as error:
+            self.logger.error(f"Failed to generate mock game state at {state_file}: {error}")
     
     def _send_test_command(self):
         """Send a test command to SCAR."""

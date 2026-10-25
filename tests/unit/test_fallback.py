@@ -16,13 +16,14 @@ Date: 2026-10-18
 """
 
 import pytest
+import sys
 import time
+import threading
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
-import sys
 
 # Add parent directory to Python path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
+sys.path.insert(0, str((Path(__file__).parent.parent.parent / "python").resolve()))
 
 from orchestrator.fallback import (
     FallbackManager,
@@ -918,7 +919,3 @@ class TestThreadSafety:
         
         # All should return NORMAL
         assert all(mode == FallbackMode.NORMAL for mode in results)
-
-
-# Import threading for the last test
-import threading

@@ -357,7 +357,7 @@ Python Service           SCAR Mod
 ### In-Game Testing
 1. **Load Mod**: Package as `.sga` and load in CoH1 skirmish
 2. **Verify Initialization**: Check logs for successful initialization
-3. **Check State Files**: Verify `coh1ai_data/coh1ai_state.json` is created and updated
+3. **Check State Files**: While a match is active, verify SCAR writes `coh1ai_state.json` under the CoH1 installation directory's `coh1ai_data` folder. Python removes each snapshot after reading; inspect `states.jsonl` there for persistent history. Stop Python temporarily if you need to inspect a raw snapshot before it is consumed.
 4. **Send Commands**: Test command execution from Python service
 5. **Measure Latency**: Time round-trip from command send to state update
 
@@ -429,7 +429,7 @@ constant IPC_UPDATE_INTERVAL = 0.05        // Main update loop interval
 
 #### "File write failed"
 - **Cause**: File permissions or directory doesn't exist
-- **Solution**: Ensure `coh1ai_data/` directory exists and is writable
+- **Solution**: Ensure `coh1ai_data/` under the CoH1 installation directory exists and is writable
 
 #### "JSON encode failed"
 - **Cause**: Circular references or unsupported data types

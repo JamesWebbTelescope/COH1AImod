@@ -27,10 +27,10 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 
 try:
-    from .config import get_config
+    from .config import get_config, resolve_data_dir
 except ImportError:
     # For direct execution or testing
-    from config import get_config
+    from config import get_config, resolve_data_dir
 
 
 class FallbackIPCType(Enum):
@@ -316,7 +316,7 @@ class ConsoleLogRelayIPC:
         self.logger = logging.getLogger(f"{__name__}.ConsoleLogRelayIPC")
         
         ipc_config = self.config.get("ipc") or {}
-        data_dir = Path(ipc_config.get("data_dir") or "coh1ai_data")
+        data_dir = resolve_data_dir(ipc_config.get("data_dir") or "coh1ai_data")
         self.log_file = data_dir / log_file
         
         self.status = FallbackIPCStatus.DISCONNECTED

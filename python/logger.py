@@ -19,12 +19,12 @@ from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass, field
 
 try:
-    from .config import get_config
+    from .config import get_config, resolve_data_dir
     from .schema import GameState
 except ImportError:
     # For direct execution or testing
     try:
-        from config import get_config
+        from config import get_config, resolve_data_dir
         from schema import GameState
     except ImportError:
         # Define minimal GameState for type hints if imports fail
@@ -242,38 +242,9 @@ class StateLogger:
         Returns:
             Path to the resolved log directory
         """
-        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
-        data_dirs = []
-        
-        # FIRST: Check in CoH1's base directory (where SCAR writes files)
-        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
-        data_dirs.append(coh1_base / config_data_dir)
-        
-        # SECOND: Check absolute Steam path
-        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
-        if steam_path.exists():
-            data_dirs.append(steam_path / config_data_dir)
-        
-        # THIRD: Check in the mod directory
-        mod_dir = Path(__file__).parent
-        data_dirs.append(mod_dir / config_data_dir)
-        
-        # FOURTH: Check in mod directory under Steam
-        if steam_path.exists():
-            data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
-        
-        # FIFTH: Add the configured data directory relative to current working dir
-        data_dirs.append(Path(config_data_dir))
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        data_dirs = [p for p in data_dirs if not (p in seen or seen.add(p))]
-        
-        # Always prefer CoH1 base directory since that's where SCAR writes
-        # If it doesn't exist, it will be created when SCAR writes files
-        coh1_base_dir = data_dirs[0]  # First one is CoH1 base
-        self.logger.info(f"Using data directory: {coh1_base_dir}")
-        return coh1_base_dir
+        data_dir = resolve_data_dir(config_data_dir)
+        self.logger.info(f"Using data directory: {data_dir}")
+        return data_dir
     
     def log_state(self, state: Union[Dict[str, Any], GameState], timestamp: Optional[float] = None) -> bool:
         """
@@ -459,38 +430,9 @@ class LogParser:
         Returns:
             Path to the resolved log directory
         """
-        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
-        data_dirs = []
-        
-        # FIRST: Check in CoH1's base directory (where SCAR writes files)
-        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
-        data_dirs.append(coh1_base / config_data_dir)
-        
-        # SECOND: Check absolute Steam path
-        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
-        if steam_path.exists():
-            data_dirs.append(steam_path / config_data_dir)
-        
-        # THIRD: Check in the mod directory
-        mod_dir = Path(__file__).parent
-        data_dirs.append(mod_dir / config_data_dir)
-        
-        # FOURTH: Check in mod directory under Steam
-        if steam_path.exists():
-            data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
-        
-        # FIFTH: Add the configured data directory relative to current working dir
-        data_dirs.append(Path(config_data_dir))
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        data_dirs = [p for p in data_dirs if not (p in seen or seen.add(p))]
-        
-        # Always prefer CoH1 base directory since that's where SCAR writes
-        # If it doesn't exist, it will be created when SCAR writes files
-        coh1_base_dir = data_dirs[0]  # First one is CoH1 base
-        self.logger.info(f"Using data directory: {coh1_base_dir}")
-        return coh1_base_dir
+        data_dir = resolve_data_dir(config_data_dir)
+        self.logger.info(f"Using data directory: {data_dir}")
+        return data_dir
     
     def parse_state_log(self, filepath: Optional[Path] = None) -> List[Dict[str, Any]]:
         """

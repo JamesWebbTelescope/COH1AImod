@@ -14,7 +14,15 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
-from config import Configuration, get_config, load_config, save_config, reset_config
+from config import (
+    COH1AI_DATA_DIR,
+    Configuration,
+    get_config,
+    load_config,
+    resolve_data_dir,
+    save_config,
+    reset_config,
+)
 
 
 class TestConfigurationBasics:
@@ -26,6 +34,29 @@ class TestConfigurationBasics:
         assert config is not None
         assert config._config is not None
         assert len(config._config) > 0
+
+    def test_configuration_instances_do_not_share_nested_defaults(self):
+        first = Configuration()
+        second = Configuration()
+
+        first._config["ipc"]["data_dir"] = "custom_data"
+
+        assert second._config["ipc"]["data_dir"] == "coh1ai_data"
+
+    def test_default_data_paths_resolve_from_game_install(self):
+        game_dir = Path(__file__).resolve().parents[4]
+        data_dir = resolve_data_dir("coh1ai_data")
+
+        assert data_dir == game_dir / "coh1ai_data"
+        assert data_dir == COH1AI_DATA_DIR
+        assert Configuration()._get_default_config_path() == data_dir / "config.json"
+
+    def test_coh1ai_data_cannot_resolve_outside_game_install(self, tmp_path):
+        with pytest.raises(ValueError, match="coh1ai_data must be located"):
+            resolve_data_dir(tmp_path / "coh1ai_data")
+
+        with pytest.raises(ValueError, match="Relative data directories"):
+            resolve_data_dir(Path("..") / "Mods" / "COh1AIMod")
     
     def test_get_configuration_values(self):
         """Test getting configuration values."""

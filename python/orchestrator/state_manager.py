@@ -82,8 +82,8 @@ class StateManager:
         self.stats = StateManagerStats()
         
         # Configuration
-        self.history_depth = self.config.get("state", "history_depth", 100)
-        self.validation_enabled = self.config.get("state", "validation_enabled", True)
+        self.history_depth = self.config.get("state", "history_depth", default=100)
+        self.validation_enabled = self.config.get("state", "validation_enabled", default=True)
         
         # State flags
         self.running = False

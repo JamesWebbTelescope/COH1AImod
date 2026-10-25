@@ -172,6 +172,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Unreleased
+
+### Added
+- **Execution Checklist** (`EXECUTION_SHEET.md`) - Working execution checklist for phase validation with stop/go gates
+- **Orchestrator Main Tests** (`tests/unit/test_orchestrator_main.py`) - Unit tests for orchestrator main module
+- **Binary Mod File** (`-modname`) - CoH1 mod binary file for deployment
+
+### Changed
+- **Configuration Security** (`python/config.py`) - Added `resolve_data_dir()` with security checks to prevent coh1ai_data redirection, ensuring all IPC files stay under CoH1 installation directory
+- **Documentation Clarification** (`README.md`) - Updated all references to clarify that coh1ai_data directory is in CoH1 installation directory, not mod directory; improved configuration and file watching documentation
+- **Prototype Development Plan** (`PROTOTYPE_DEVELOPMENT_PLAN.md`) - Added current status assessment with updated development priorities and key findings
+- **IPC Reader** (`python/ipc_reader.py`) - Updated to use new data directory resolution
+- **Logger Module** (`python/logger.py`) - Improved import fallback handling
+- **Orchestrator Main** (`python/orchestrator/main.py`) - Integrated new data directory resolution
+- **Command Processor** (`python/orchestrator/command_processor.py`) - Minor updates for consistency
+- **State Manager** (`python/orchestrator/state_manager.py`) - Minor updates for consistency
+- **Fallback IPC** (`python/ipc_fallback.py`) - Minor updates for consistency
+- **SCAR Documentation** (`docs/SCAR_IMPLEMENTATION.md`) - Documentation updates for clarity
+- **Testing Guide** (`docs/TESTING_GUIDE.md`) - Documentation updates for Phase 1 validation
+- **Test Plan** (`TEST_PLAN.md`) - Updated test plan for Phase 1
+- **Test Updates** - Updated test files for consistency with new configuration:
+  - `tests/unit/test_config.py`
+  - `tests/unit/test_fallback.py`
+  - `tests/unit/test_reflex_layer.py`
+  - `tests/integration/test_reflex_integration.py`
+
+---
+
 ## 🎯 **Current Status: Phase 0 - 90% Complete**
 
 ### ✅ Completed

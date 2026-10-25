@@ -21,10 +21,10 @@ from enum import Enum, auto
 import logging
 
 try:
-    from .config import get_config
+    from .config import get_config, resolve_data_dir
 except ImportError:
     # For direct execution or testing
-    from config import get_config
+    from config import get_config, resolve_data_dir
 
 
 class IPCStatus(Enum):
@@ -96,39 +96,9 @@ class IPCReader:
         self.poll_interval = ipc_config.get("poll_interval") or 0.05
         self.max_retries = ipc_config.get("max_retries") or 3
         
-        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
-        # SCAR writes to coh1ai_data/ relative to CoH1's base directory
-        # Python might run from the mod directory
-        self.data_dirs = []
         config_data_dir = ipc_config.get("data_dir") or "coh1ai_data"
-        
-        # FIRST: Check in CoH1's base directory (where SCAR writes files)
-        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
-        self.data_dirs.append(coh1_base / config_data_dir)
-        
-        # SECOND: Check absolute Steam path
-        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
-        if steam_path.exists():
-            self.data_dirs.append(steam_path / config_data_dir)
-        
-        # THIRD: Check in the mod directory
-        mod_dir = Path(__file__).parent
-        self.data_dirs.append(mod_dir / config_data_dir)
-        
-        # FOURTH: Check in mod directory under Steam
-        if steam_path.exists():
-            self.data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
-        
-        # FIFTH: Add the configured data directory relative to current working dir
-        self.data_dirs.append(Path(config_data_dir))
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        self.data_dirs = [p for p in self.data_dirs if not (p in seen or seen.add(p))]
-        
-        # Always prefer CoH1 base directory since that's where SCAR writes
-        # If it doesn't exist, it will be created when SCAR writes files
-        self.data_dir = self.data_dirs[0]  # First one is CoH1 base
+        self.data_dir = resolve_data_dir(config_data_dir)
+        self.data_dirs = [self.data_dir]
         
         self.logger.info(f"Checking data directories: {[str(d) for d in self.data_dirs]}")
         self.logger.info(f"Using data directory: {self.data_dir}")
@@ -248,16 +218,6 @@ class IPCReader:
         # Try primary state file first
         if self.state_file.exists():
             return self._read_state_file_at(self.state_file)
-        
-        # Try all data directories
-        for data_dir in self.data_dirs:
-            test_file = data_dir / self.state_file_name
-            if test_file.exists():
-                self.logger.info(f"Found state file at: {test_file}")
-                self.state_file = test_file
-                self.command_file = data_dir / self.command_file_name
-                self.lock_file = data_dir / self.lock_file_name
-                return self._read_state_file_at(test_file)
         
         return None
     

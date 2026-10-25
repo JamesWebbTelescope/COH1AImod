@@ -190,7 +190,7 @@ class TestArtilleryResponse:
         dz = pos2.z - pos1.z
         distance = (dx**2 + dy**2 + dz**2) ** 0.5
         
-        assert distance == 70.71067811865475  # sqrt(50^2 + 50^2)
+        assert distance == pytest.approx(70.71067811865475)  # sqrt(50^2 + 50^2)
 
 
 # ============================================
@@ -573,7 +573,7 @@ class TestIntegrationScenarios:
         ARTILLERY_RESPONSE_DISTANCE = 50.0
         should_respond = distance <= ARTILLERY_RESPONSE_DISTANCE
         
-        assert distance == 28.2842712474619
+        assert distance == pytest.approx(28.2842712474619)
         assert should_respond is True
         
     def test_capture_point_scenario(self):

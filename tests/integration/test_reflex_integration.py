@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
 from orchestrator.fallback import FallbackManager, FallbackMode
 from safety_filter import SafetyFilter, SafetyFilterResult
-from validator import ActionValidator, validate_command
+from validator import ActionValidator
 
 
 # ============================================
@@ -90,7 +90,7 @@ class TestReflexWithSafetyFilter:
         result = safety_filter.check_command(command)
         
         # Retreat should always be safe (doesn't cost resources or population)
-        assert result.passed or result.passed_with_warnings
+        assert result.is_safe
         
     def test_build_command_safety(self, safety_filter):
         """Test that build commands pass safety checks with sufficient resources."""
@@ -104,7 +104,7 @@ class TestReflexWithSafetyFilter:
         result = safety_filter.check_command(command)
         
         # Build should pass if resources are sufficient
-        assert result.passed or result.passed_with_warnings
+        assert result.is_safe
         
     def test_build_command_unsafe(self, safety_filter):
         """Test that build commands fail safety checks with insufficient resources."""
@@ -130,7 +130,7 @@ class TestReflexWithSafetyFilter:
         result = low_safety_filter.check_command(command)
         
         # Build should fail with insufficient resources
-        assert not result.passed
+        assert not result.is_safe
         
     def test_reflex_decision_with_safety(self, safety_filter):
         """Test that reflex layer decisions consider safety constraints."""
@@ -138,14 +138,14 @@ class TestReflexWithSafetyFilter:
         command = {
             "command": "BUILD",
             "engineer_id": 2,
-            "building_type": "riflemen",
+            "building_type": "barracks",
             "position": [400, 400, 0]
         }
         
         result = safety_filter.check_command(command)
         
         # Should pass with current resources
-        assert result.passed or result.passed_with_warnings
+        assert result.is_safe
 
 
 # ============================================
@@ -162,9 +162,9 @@ class TestReflexWithValidator:
             "squad_id": 1
         }
         
-        result = validate_command(command)
+        result = validator.validate(command)
         
-        assert result.is_valid()
+        assert result.is_valid
         
     def test_validate_attack_move_command(self, validator):
         """Test validation of attack move command."""
@@ -174,9 +174,9 @@ class TestReflexWithValidator:
             "position": [400, 400, 0]
         }
         
-        result = validate_command(command)
+        result = validator.validate(command)
         
-        assert result.is_valid()
+        assert result.is_valid
         
     def test_validate_invalid_command(self, validator):
         """Test validation of invalid command."""
@@ -185,9 +185,9 @@ class TestReflexWithValidator:
             "squad_id": 1
         }
         
-        result = validate_command(command)
+        result = validator.validate(command)
         
-        assert not result.is_valid()
+        assert not result.is_valid
         
     def test_reflex_command_validation_pipeline(self, validator, safety_filter):
         """Test complete command validation pipeline."""
@@ -197,15 +197,15 @@ class TestReflexWithValidator:
         }
         
         # Step 1: Validate command
-        validation_result = validate_command(command)
-        assert validation_result.is_valid()
+        validation_result = validator.validate(command)
+        assert validation_result.is_valid
         
         # Step 2: Check safety
         safety_result = safety_filter.check_command(command)
-        assert safety_result.passed or safety_result.passed_with_warnings
+        assert safety_result.is_safe
         
         # Command can be executed
-        assert validation_result.is_valid() and (safety_result.passed or safety_result.passed_with_warnings)
+        assert validation_result.is_valid and safety_result.is_safe
 
 
 # ============================================
@@ -305,7 +305,7 @@ class TestReflexResourceManagement:
         result = safety_filter.check_command(command)
         
         # With sufficient resources, should pass
-        assert result.passed or result.passed_with_warnings
+        assert result.is_safe
         
     def test_build_queue_population_awareness(self, safety_filter):
         """Test that build queue management respects population constraints."""
@@ -330,7 +330,7 @@ class TestReflexResourceManagement:
         result = max_pop_filter.check_command(command)
         
         # Should fail due to population cap
-        assert not result.passed
+        assert not result.is_safe
 
 
 # ============================================
@@ -394,12 +394,12 @@ class TestReflexWithCommandExecution:
         }
         
         # Validate
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # Check safety
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
         
         # Command is ready for execution
         
@@ -412,12 +412,12 @@ class TestReflexWithCommandExecution:
         }
         
         # Validate
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # Check safety (move should always be safe)
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
         
     def test_capture_command_execution(self, validator, safety_filter):
         """Test that capture commands can be validated and are safe."""
@@ -428,12 +428,12 @@ class TestReflexWithCommandExecution:
         }
         
         # Validate
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # Check safety (capture should always be safe)
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
 
 
 # ============================================
@@ -540,15 +540,15 @@ class TestCompleteReflexPipeline:
         }
         
         # 3. Validate command
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # 4. Check safety
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
         
         # 5. Command can be executed
-        assert should_retreat and validation.is_valid() and (safety.passed or safety.passed_with_warnings)
+        assert should_retreat and validation.is_valid and safety.is_safe
         
     def test_complete_artillery_pipeline(self, validator, safety_filter):
         """Test complete pipeline: detect artillery -> create move -> validate -> check safety."""
@@ -567,12 +567,12 @@ class TestCompleteReflexPipeline:
         }
         
         # 3. Validate command
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # 4. Check safety
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
         
     def test_complete_capture_pipeline(self, validator, safety_filter):
         """Test complete pipeline: detect neutral CP -> assign squad -> capture."""
@@ -590,12 +590,12 @@ class TestCompleteReflexPipeline:
         }
         
         # 3. Validate command
-        validation = validate_command(command)
-        assert validation.is_valid()
+        validation = validator.validate(command)
+        assert validation.is_valid
         
         # 4. Check safety
         safety = safety_filter.check_command(command)
-        assert safety.passed or safety.passed_with_warnings
+        assert safety.is_safe
 
 
 # ============================================

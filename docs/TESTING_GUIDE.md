@@ -358,25 +358,22 @@ function OnGameStart() {
 ## Test Environment Setup
 
 ### Directory Structure
+`coh1ai_data` is relative to the CoH1 installation directory (the same directory as `RelicCOH.exe`), not the mod source directory.
+
 ```
 C:/Games/Company of Heroes/
-├── Data/
-│   └── Mods/
-│       └── COH1AImod/
-│           ├── mod.scar
-│           ├── ipc.scar
-│           └── ...
 ├── coh1ai_data/
 │   ├── coh1ai_state.json
 │   ├── coh1ai_commands.json
 │   └── coh1ai.log
-└── python/
-    ├── orchestrator/
-    └── config.py
+└── Mods/
+    └── COH1AImod/
+        ├── mod.scar
+        └── ...
 ```
 
 ### Configuration Files
-- `coh1ai_data/config.json` - Main configuration
+- `coh1ai_data/config.json` - Runtime configuration under the CoH1 installation directory
 - `scar/config.scar` - SCAR-side configuration
 
 ---

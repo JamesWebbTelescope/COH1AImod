@@ -1,6 +1,8 @@
 # Phase 0 Testing Plan - Steps 1 & 2
 ## SCAR Mod Loading & State Collection Tests
 
+All `coh1ai_data/` paths below refer to the folder under the CoH1 installation directory (the same directory as `RelicCOH.exe`), not the mod repository. Run data-file commands from that directory or use its absolute path. IPC snapshots and commands use `.json`; persistent logs use JSON Lines (`.jsonl`).
+
 **Project**: CoH1 × Mistral AI Mod  
 **Phase**: 0 - Foundation (IPC Spike)  
 **Objective**: Verify SCAR mod loads in CoH1 and game state data is collected correctly  
@@ -203,16 +205,16 @@ echo "[Add any observations, errors, or unexpected behavior]" >> test_results/ph
 1. Launch CoH1 with mod enabled
 2. Start a skirmish game
 3. Let the game run for **30-60 seconds** (to generate game state)
-4. Exit the game cleanly
+4. To inspect the transient `.json` snapshot, pause/stop the Python orchestrator while leaving the match active; otherwise it may consume and delete the snapshot as soon as it is written.
 
 #### Step 2.3: Verify State File Creation
 ```bash
-# Check if state file exists
+# Run from the CoH1 installation directory
 cd coh1ai_data
 ls -la coh1ai_state.json
 ```
 
-**Expected**: File `coh1ai_state.json` exists and has content (> 100 bytes)
+**Expected**: While the orchestrator is stopped and the match is active, `coh1ai_state.json` exists and has content (> 100 bytes). Restart the orchestrator after checking it.
 
 ### Test Validation
 

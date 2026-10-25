@@ -134,9 +134,9 @@ class CommandProcessor:
         self.stats = CommandProcessorStats()
         
         # Configuration
-        self.max_queue_length = self.config.get("command_processor", "max_queue_length", 50)
-        self.max_retries = self.config.get("command_processor", "max_retries", 3)
-        self.execution_timeout = self.config.get("command_processor", "execution_timeout", 10.0)
+        self.max_queue_length = self.config.get("command_processor", "max_queue_length", default=50)
+        self.max_retries = self.config.get("command_processor", "max_retries", default=3)
+        self.execution_timeout = self.config.get("command_processor", "execution_timeout", default=10.0)
         
         # State
         self.running = False

@@ -16,6 +16,7 @@ Date: 2026-10-04
 import json
 import os
 import logging
+import copy
 from typing import Optional, Dict, Any
 from pathlib import Path
 
@@ -92,6 +93,31 @@ DEFAULT_CONFIG = {
 }
 
 
+COH1_INSTALL_DIR = Path(__file__).resolve().parents[3]
+COH1AI_DATA_DIR = COH1_INSTALL_DIR / "coh1ai_data"
+
+
+def resolve_data_dir(config_data_dir: Path | str = "coh1ai_data") -> Path:
+    """Resolve the shared SCAR/Python data directory under the CoH1 install."""
+    data_dir = Path(config_data_dir)
+    if data_dir.is_absolute():
+        resolved_dir = data_dir.resolve()
+        if data_dir.name.casefold() == "coh1ai_data" and resolved_dir != COH1AI_DATA_DIR:
+            raise ValueError(f"coh1ai_data must be located at {COH1AI_DATA_DIR}")
+        return resolved_dir
+
+    resolved_dir = (COH1_INSTALL_DIR / data_dir).resolve()
+    if data_dir.name.casefold() == "coh1ai_data" and resolved_dir != COH1AI_DATA_DIR:
+        raise ValueError(f"coh1ai_data must be located at {COH1AI_DATA_DIR}")
+    try:
+        resolved_dir.relative_to(COH1_INSTALL_DIR)
+    except ValueError as error:
+        raise ValueError(
+            f"Relative data directories must remain under {COH1_INSTALL_DIR}"
+        ) from error
+    return resolved_dir
+
+
 class Configuration:
     """Main configuration class for the CoH1 AI mod."""
     
@@ -102,13 +128,13 @@ class Configuration:
         Args:
             config_path: Optional path to config file. If None, uses default path.
         """
-        self._config = DEFAULT_CONFIG.copy()
+        self._config = copy.deepcopy(DEFAULT_CONFIG)
         self._config_path = config_path or self._get_default_config_path()
         self._logger = None
         
     def _get_default_config_path(self) -> Path:
         """Get the default configuration file path."""
-        return Path(self._config["ipc"]["data_dir"]) / "config.json"
+        return resolve_data_dir(self._config["ipc"]["data_dir"]) / "config.json"
     
     def load(self, path: Optional[str] = None) -> bool:
         """
@@ -186,37 +212,7 @@ class Configuration:
         Returns:
             Path to the resolved data directory
         """
-        # Try multiple data directories - CHECK COH1 BASE FIRST since that's where SCAR writes
-        data_dirs = []
-        
-        # FIRST: Check in CoH1's base directory (where SCAR writes files)
-        coh1_base = Path(__file__).parent.parent.parent.parent  # Go up to CoH1 base
-        data_dirs.append(coh1_base / config_data_dir)
-        
-        # SECOND: Check absolute Steam path
-        steam_path = Path("D:/SteamLibrary/steamapps/common/Company of Heroes Relaunch")
-        if steam_path.exists():
-            data_dirs.append(steam_path / config_data_dir)
-        
-        # THIRD: Check in the mod directory
-        mod_dir = Path(__file__).parent
-        data_dirs.append(mod_dir / config_data_dir)
-        
-        # FOURTH: Check in mod directory under Steam
-        if steam_path.exists():
-            data_dirs.append(steam_path / "Mods" / "COh1AIMod" / config_data_dir)
-        
-        # FIFTH: Add the configured data directory relative to current working dir
-        data_dirs.append(Path(config_data_dir))
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        data_dirs = [p for p in data_dirs if not (p in seen or seen.add(p))]
-        
-        # Always prefer CoH1 base directory since that's where SCAR writes
-        # If it doesn't exist, it will be created when SCAR writes files
-        coh1_base_dir = data_dirs[0]  # First one is CoH1 base
-        return coh1_base_dir
+        return resolve_data_dir(config_data_dir)
     
     def get(self, *keys, default=None) -> Any:
         """

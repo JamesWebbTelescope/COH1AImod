@@ -40,6 +40,33 @@ The IPC channel (Phase 0) is the critical path dependency - all subsequent phase
 
 ---
 
+## Current Status Assessment (Updated 2026-10-25)
+
+This prototype has progressed beyond a blank-slate implementation and now contains a meaningful architecture, project scaffolding, and supporting tooling. The repository includes a SCAR mod structure, Python orchestrator entrypoints, IPC and scheduler components, and a documented Phase 0/Phase 1 baseline. However, the project is still best described as a strong prototype rather than a validated end-to-end CoH1 AI system.
+
+### Status Summary
+- **Phase 0 (Foundation / IPC Spike)**: Documented as complete and partially validated, with file-based IPC and fallback patterns in place.
+- **Phase 1 (Read-only Intelligence)**: Architecture and state-handling foundations are present, but the live game-state collection path still requires broader validation against real SCAR data and real match scenarios.
+- **Phase 2 (Reflex Layer)**: Not considered complete; the remaining work is to prove a reliable state → decision → command loop in a repeatable, safe environment before integrating Mistral.
+- **Phase 3 (Strategist Integration)**: Still pending; Mistral-specific strategy execution should not be treated as a completed feature until the game command pipeline is stable.
+- **Phase 4 / 5**: Deferred until the live loop is stable and measurable.
+
+### Key Findings
+- The project has genuine technical scaffolding and organization, including orchestrator, scheduler, IPC, logging, and test coverage.
+- The architecture is coherent and matches the intended two-tier design: local reflex layer + external strategist.
+- The largest gap is not implementation breadth but end-to-end validation: the current code and docs do not yet prove a live, stable SCAR → Python → action loop under actual CoH1 conditions.
+- Repo-level test validation is not yet a trustworthy final gate; a broad pytest run should be treated as a progress signal, not as proof of production readiness.
+- The Mistral integration should remain behind a strict validation boundary until the reflex command path has been hardened.
+
+### Updated Development Priorities
+1. Stabilize the end-to-end state and command loop before adding additional strategic complexity.
+2. Validate the game-state schema against real CoH1 data and edge cases (economy, combat, retreat, capture-point scenarios).
+3. Harden command validation and safety gating for outgoing actions.
+4. Add a realistic evaluation harness for tactical and strategic scenarios.
+5. Treat Mistral as a high-value add-on, not as the first milestone dependency.
+
+---
+
 ## Confirmed Features
 
 ### Category 1: Core Infrastructure (Phase 0)
@@ -816,9 +843,11 @@ COH1AImod/
 
 ## Next Steps
 
-1. **Immediate**: Begin Phase 0 - Set up project structure and start SCAR mod research
-2. **This Week**: Complete Step 0.1-0.3 (project setup, SCAR research, empty mod)
-3. **Next Week**: Complete Step 0.4-0.6 (IPC implementation and latency verification)
+1. **Immediate Priority**: Stabilize the end-to-end loop: SCAR state generation → Python ingestion → reflex decision → command validation → command write-back.
+2. **Next Sprint**: Validate the game-state schema against representative CoH1 scenarios: economy, combat, retreat, capture point control, and tech unlock progression.
+3. **Next Sprint**: Hard-code the command execution contract and safety rules; ensure only validated actions are emitted and queued.
+4. **Following Sprint**: Implement the Mistral strategist behind a strict fallback policy so the system remains functional without the API.
+5. **Evaluation Phase**: Add scenario-based harnesses and metrics for latency, correctness, and stability before broadening feature scope.
 
 ---
 
@@ -826,9 +855,9 @@ COH1AImod/
 
 **User Confirmation**: All features confirmed for inclusion as-is on 2026-10-04
 
-**Plan Status**: APPROVED - Ready for execution
+**Plan Status**: UPDATED - Prototype architecture exists, but end-to-end validation remains the gating milestone for further development
 
-**Next Review**: After Phase 0 completion
+**Next Review**: After Phase 2 loop validation and scenario review
 
 ---
 

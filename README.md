@@ -155,11 +155,11 @@ RelicCOH.exe -modname coh1_mistral_ai
 1. In CoH1, start a **Skirmish** game with your preferred settings
 2. The mod will automatically load and:
    - ✅ Start collecting game state using SCAR
-   - ✅ Write state to `coh1ai_data/coh1ai_state.json` every second
-   - ✅ Read commands from `coh1ai_data/coh1ai_commands.json`
+   - ✅ Write state to the CoH1 installation's `coh1ai_data/coh1ai_state.json` every second
+   - ✅ Read commands from the CoH1 installation's `coh1ai_data/coh1ai_commands.json`
 3. The Python orchestrator (running in your command prompt) will:
    - ✅ Read the game state from the file
-   - ✅ Log state to `coh1ai_data/states.jsonl`
+   - ✅ Log state to the CoH1 installation's `coh1ai_data/states.jsonl`
    - ✅ Run tick schedulers (strategic: 10s, fast: 0.5s)
    - ✅ Prepare for AI decision making (Phase 2+)
 
@@ -207,7 +207,7 @@ COh1AIMod/
     └── performance/            # Performance tests
 ```
 
-> **Note**: The `coh1ai_data/` directory is created automatically when the mod runs.
+> **Note**: The `coh1ai_data/` directory is created automatically in the CoH1 installation directory when the orchestrator runs.
 
 ---
 
@@ -238,7 +238,8 @@ COh1AIMod/
 
 ## ⚙️ Configuration
 
-The mod uses a configuration file (`python/coh1ai_data/config.json` or specified with `--config`).
+The orchestrator reads its runtime configuration from `coh1ai_data/config.json` in the CoH1 installation directory, or from the path specified with `--config`. The repository's `coh1ai_data/config.json` is the sample configuration; copy it to the runtime path to use it. If no runtime config exists, the orchestrator creates one using defaults.
+Keep `ipc.data_dir` set to `coh1ai_data` for SCAR/Python IPC. The runtime resolver prevents a folder named `coh1ai_data` from being redirected elsewhere and prevents relative data paths from escaping the CoH1 installation directory.
 
 ### Default Configuration
 
@@ -283,7 +284,7 @@ The mod uses a configuration file (`python/coh1ai_data/config.json` or specified
 | Option | Description | Default |
 |--------|-------------|---------|
 | `ipc.poll_interval` | Polling interval in seconds | 0.05 |
-| `ipc.data_dir` | Directory for IPC files | coh1ai_data |
+| `ipc.data_dir` | Directory for IPC and log files, relative to the CoH1 installation directory | coh1ai_data |
 | `debug.level` | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
 | `debug.enabled` | Enable/disable debugging | true |
 | `testing.test_mode` | Run in test mode (no CoH1 needed) | false |
@@ -354,29 +355,29 @@ STEP 2: You launch CoH1 with: RelicCOH.exe -modname coh1_mistral_ai
 │  SCAR Mod (scar\main.scar)                                       │
 │  - Loads mod into CoH1                                            │
 │  - Collects game state every second                               │
-│  - Writes to coh1ai_data/coh1ai_state.json                       │
-│  - Reads from coh1ai_data/coh1ai_commands.json                   │
+│  - Writes to <CoH1 install>\coh1ai_data\coh1ai_state.json        │
+│  - Reads from <CoH1 install>\coh1ai_data\coh1ai_commands.json    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
-                    coh1ai_data/coh1ai_state.json
+             <CoH1 install>\coh1ai_data\coh1ai_state.json
                               ▼
-                    Python reads state
+             Python reads and removes the snapshot
                               ▼
-                    Log to coh1ai_data/states.jsonl
+             Append to <CoH1 install>\coh1ai_data\states.jsonl
 ```
 
 ### File Watching
 
-The mod creates and watches these files in `coh1ai_data/`:
+SCAR and Python use `coh1ai_data/` under the CoH1 installation directory:
 
 | File | Direction | Purpose |
 |------|-----------|---------|
-| `coh1ai_state.json` | SCAR → Python | Game state from CoH1 |
+| `coh1ai_state.json` | SCAR → Python | Transient game-state snapshot; Python removes it after reading |
 | `coh1ai_commands.json` | Python → SCAR | Commands to execute |
 | `coh1ai_lock.tmp` | Both | File locking for safety |
-| `states.jsonl` | Python | Log of all game states |
-| `commands.jsonl` | Python | Log of all commands |
+| `states.jsonl` | Python | Persistent JSON Lines history of game states |
+| `commands.jsonl` | Python | Persistent JSON Lines history of commands |
 | `coh1ai.log` | Python | General log file |
 
 ---
@@ -462,10 +463,10 @@ python python\main.py
 
 ### "File not found" errors
 
-**Solution**: The `coh1ai_data/` directory is created automatically. If it doesn't exist:
+**Solution**: The orchestrator creates `coh1ai_data\` under the CoH1 installation directory automatically. If preparing it manually, create it there (not under the mod directory).
 
-```bash
-mkdir coh1ai_data
+```batch
+mkdir "<CoH1 installation directory>\coh1ai_data"
 ```
 
 ---
@@ -491,10 +492,11 @@ mkdir coh1ai_data
 
 **Solution**:
 1. Start Python orchestrator **FIRST** (before CoH1)
-2. Check that `coh1ai_state.json` is being created and updated in `coh1ai_data/`
-3. Verify both components are using the same `data_dir` configuration
-4. Check the orchestrator console for errors
-5. Check SCAR console (press ~ in CoH1) for SCAR-side errors
+2. While a match is active, SCAR writes `coh1ai_state.json` under `<CoH1 installation directory>\coh1ai_data\`; Python may consume and remove it immediately
+3. Check persistent state history in `<CoH1 installation directory>\coh1ai_data\states.jsonl`
+4. Verify both components use the same `ipc.data_dir` configuration
+5. Check the orchestrator console for errors
+6. Check SCAR console (press ~ in CoH1) for SCAR-side errors
 
 ---
 
@@ -588,7 +590,7 @@ RelicCOH.exe -modname coh1_mistral_ai
 **What happens:**
 - SCAR mod loads in CoH1 and collects game state
 - Python orchestrator reads state and logs it
-- Files update every second in `coh1ai_data/`
+- SCAR snapshots are written every second under `<CoH1 installation directory>\coh1ai_data\`; Python consumes them and appends to `states.jsonl`
 - Schedulers tick for future AI decisions
 
 **Phases Complete:** Phase 0 ✅ + Phase 1 ✅  
