@@ -444,6 +444,53 @@ class ActionValidator:
     def reset_stats(self) -> None:
         """Reset validation statistics."""
         self.stats = ValidatorStats()
+    
+    def validate_whitelist(self, command: Dict[str, Any]) -> ValidationResult:
+        """
+        Validate that a command is in the whitelist.
+        
+        Args:
+            command: The command dictionary to check
+            
+        Returns:
+            ValidationResult with is_valid indicating if command type is whitelisted
+        """
+        command_type_str = command.get("command")
+        if command_type_str is None:
+            return ValidationResult(
+                is_valid=False,
+                command=command,
+                errors=["Command missing 'command' field"]
+            )
+        
+        try:
+            command_type = CommandType(command_type_str)
+            is_valid = command_type in self.whitelist
+            if not is_valid:
+                return ValidationResult(
+                    is_valid=False,
+                    command=command,
+                    errors=[f"Command type '{command_type_str}' is not in whitelist"]
+                )
+            return ValidationResult(is_valid=True, command=command)
+        except ValueError:
+            return ValidationResult(
+                is_valid=False,
+                command=command,
+                errors=[f"Unknown command type: '{command_type_str}'"]
+            )
+    
+    def validate_command(self, command: Dict[str, Any]) -> ValidationResult:
+        """
+        Validate a command (alias for validate method).
+        
+        Args:
+            command: The command dictionary to validate
+            
+        Returns:
+            ValidationResult with full validation
+        """
+        return self.validate(command)
 
 
 # ============================================

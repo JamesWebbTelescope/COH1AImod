@@ -76,7 +76,20 @@ class OrchestratorService:
         self.ipc_reader = IPCReader(self.config)
         self.state_logger = StateLogger(self.config)
         self.state_manager = StateManager(self.config, self.ipc_reader)
-        self.command_processor = CommandProcessor(self.config, self.ipc_reader)
+        
+        # Initialize validator and safety filter
+        from validator import get_validator, ActionValidator
+        from safety_filter import get_safety_filter, SafetyFilter
+        self.validator = get_validator()
+        self.safety_filter = get_safety_filter()
+        
+        # Initialize command processor with validation components
+        self.command_processor = CommandProcessor(
+            self.config, 
+            self.ipc_reader, 
+            self.validator,
+            self.safety_filter
+        )
         
         # Initialize schedulers
         self.scheduler_manager = SchedulerManager()
@@ -229,6 +242,9 @@ class OrchestratorService:
             # Log state using state logger
             if state:
                 self.state_logger.log_state(state)
+            
+            # Update command processor with current game state for safety filtering
+            self.command_processor.update_game_state(state)
             
             # Log state summary
             if "player_id" in message.data:

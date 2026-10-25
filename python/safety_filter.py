@@ -177,22 +177,22 @@ class SafetyFilter:
         self.logger = logging.getLogger(__name__)
         
         # Safety settings from config
-        self.check_resources = self.config.get("check_resources", True)
-        self.check_pop_cap = self.config.get("check_pop_cap", True)
-        self.check_pathfinding = self.config.get("check_pathfinding", True)
-        self.check_legality = self.config.get("check_legality", True)
+        self.enable_resource_check = self.config.get("check_resources", True)
+        self.enable_pop_cap_check = self.config.get("check_pop_cap", True)
+        self.enable_pathfinding_check = self.config.get("check_pathfinding", True)
+        self.enable_legality_check = self.config.get("check_legality", True)
         
         # Maximum path distance (for performance)
         self.max_path_distance = self.config.get("max_path_distance", 1000)
         
         self.logger.info("SafetyFilter initialized")
-        if not self.check_resources:
+        if not self.enable_resource_check:
             self.logger.warning("Resource checking disabled")
-        if not self.check_pop_cap:
+        if not self.enable_pop_cap_check:
             self.logger.warning("Population cap checking disabled")
-        if not self.check_pathfinding:
+        if not self.enable_pathfinding_check:
             self.logger.warning("Pathfinding checking disabled")
-        if not self.check_legality:
+        if not self.enable_legality_check:
             self.logger.warning("Legality checking disabled")
     
     def check_command(self, command: Dict[str, Any]) -> SafetyFilterResult:
@@ -213,25 +213,25 @@ class SafetyFilter:
         command_type = command.get("command", "").upper()
         
         # Run all checks
-        if self.check_resources:
+        if self.enable_resource_check:
             resource_check = self._check_resources(command, command_type)
             checks.append(resource_check)
             if not resource_check.is_safe:
                 errors.append(resource_check.message)
         
-        if self.check_pop_cap:
+        if self.enable_pop_cap_check:
             pop_check = self._check_population(command, command_type)
             checks.append(pop_check)
             if not pop_check.is_safe:
                 errors.append(pop_check.message)
         
-        if self.check_pathfinding:
+        if self.enable_pathfinding_check:
             path_check = self._check_pathfinding(command, command_type)
             checks.append(path_check)
             if not path_check.is_safe:
                 errors.append(path_check.message)
         
-        if self.check_legality:
+        if self.enable_legality_check:
             legality_check = self._check_legality(command, command_type)
             checks.append(legality_check)
             if not legality_check.is_safe:
@@ -561,11 +561,68 @@ class SafetyFilter:
     def set_config(self, config: Dict[str, Any]) -> None:
         """Update the configuration."""
         self.config = config
-        self.check_resources = self.config.get("check_resources", True)
-        self.check_pop_cap = self.config.get("check_pop_cap", True)
-        self.check_pathfinding = self.config.get("check_pathfinding", True)
-        self.check_legality = self.config.get("check_legality", True)
+        self.enable_resource_check = self.config.get("check_resources", True)
+        self.enable_pop_cap_check = self.config.get("check_pop_cap", True)
+        self.enable_pathfinding_check = self.config.get("check_pathfinding", True)
+        self.enable_legality_check = self.config.get("check_legality", True)
         self.max_path_distance = self.config.get("max_path_distance", 1000)
+    
+    def check_resources(self, game_state: Dict[str, Any], required: Dict[str, int]) -> SafetyFilterResult:
+        """
+        Check if there are enough resources for a command.
+        
+        Args:
+            game_state: Current game state with resources
+            required: Dictionary of required resources (manpower, fuel, munitions)
+            
+        Returns:
+            SafetyFilterResult with is_safe and is_valid indicating if resources are sufficient
+        """
+        errors = []
+        resources = game_state.get("resources", {})
+        
+        for resource_type, required_amount in required.items():
+            resource = resources.get(resource_type, {})
+            current = resource.get("current", 0)
+            if current < required_amount:
+                errors.append(f"Insufficient {resource_type}: need {required_amount}, have {current}")
+        
+        result = SafetyFilterResult(
+            is_safe=len(errors) == 0,
+            command={},
+            errors=errors
+        )
+        # Add is_valid for backward compatibility with tests
+        result.is_valid = result.is_safe
+        return result
+    
+    def check_population(self, game_state: Dict[str, Any], amount: int) -> SafetyFilterResult:
+        """
+        Check if there is enough population cap for a command.
+        
+        Args:
+            game_state: Current game state with population info
+            amount: Required population amount
+            
+        Returns:
+            SafetyFilterResult with is_safe and is_valid indicating if population allows the command
+        """
+        errors = []
+        population = game_state.get("population", {})
+        current = population.get("current", 0)
+        max_pop = population.get("max", 0)
+        
+        if current + amount > max_pop:
+            errors.append(f"Population cap exceeded: {current} + {amount} > {max_pop}")
+        
+        result = SafetyFilterResult(
+            is_safe=len(errors) == 0,
+            command={},
+            errors=errors
+        )
+        # Add is_valid for backward compatibility with tests
+        result.is_valid = result.is_safe
+        return result
 
 
 # ============================================

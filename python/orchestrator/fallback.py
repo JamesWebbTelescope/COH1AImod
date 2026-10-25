@@ -390,35 +390,44 @@ class FallbackManager:
         Returns:
             True if API is available, False otherwise
         """
+        should_trigger_fallback = False
+        return_value = None
+        
         with self._lock:
             # Check if we should perform an API check
             now = time.time()
             if now - self._last_api_check < self.api_check_interval:
                 # Too soon since last check
-                return self._api_failure_count < self.max_api_failures
-            
-            self._last_api_check = now
-            
-            # Perform API check
-            if self._check_api_available():
-                self._api_failure_count = 0
-                self._last_api_failure_time = None
-                self.logger.debug("API check: Available")
-                return True
+                return_value = self._api_failure_count < self.max_api_failures
             else:
-                self._api_failure_count += 1
-                self._last_api_failure_time = now
-                self.logger.warning(f"API check: Failure #{self._api_failure_count}")
+                self._last_api_check = now
                 
-                # Auto-trigger fallback if threshold reached
-                if self._api_failure_count >= self.max_api_failures:
-                    self.logger.warning("API failure threshold reached, triggering fallback")
-                    self.trigger_fallback(
-                        reason=f"{self._api_failure_count} consecutive API failures",
-                        fallback_reason=FallbackReason.CONNECTION_ERROR
-                    )
-                
-                return False
+                # Perform API check
+                if self._check_api_available():
+                    self._api_failure_count = 0
+                    self._last_api_failure_time = None
+                    self.logger.debug("API check: Available")
+                    return_value = True
+                else:
+                    self._api_failure_count += 1
+                    self._last_api_failure_time = now
+                    self.logger.warning(f"API check: Failure #{self._api_failure_count}")
+                    
+                    # Auto-trigger fallback if threshold reached
+                    if self._api_failure_count >= self.max_api_failures:
+                        self.logger.warning("API failure threshold reached, triggering fallback")
+                        should_trigger_fallback = True
+                    
+                    return_value = False
+        
+        # Trigger fallback outside the lock to avoid deadlock
+        if should_trigger_fallback:
+            self.trigger_fallback(
+                reason=f"{self._api_failure_count} consecutive API failures",
+                fallback_reason=FallbackReason.CONNECTION_ERROR
+            )
+        
+        return return_value
     
     def _check_api_available(self) -> bool:
         """

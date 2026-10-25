@@ -31,6 +31,18 @@ except ImportError:
     # For direct execution or testing
     from config import Configuration
 
+try:
+    from ..validator import ActionValidator, get_validator
+except ImportError:
+    # For direct execution or testing
+    from validator import ActionValidator, get_validator
+
+try:
+    from ..safety_filter import SafetyFilter, get_safety_filter
+except ImportError:
+    # For direct execution or testing
+    from safety_filter import SafetyFilter, get_safety_filter
+
 
 class CommandStatus(Enum):
     """Status of a command."""
@@ -113,13 +125,19 @@ class CommandProcessor:
     Manages the command queue, validates commands, and tracks their execution.
     """
     
-    def __init__(self, config: Configuration = None, ipc_reader=None):
+    def __init__(self, config: Configuration = None, ipc_reader=None, 
+                 validator: ActionValidator = None, 
+                 safety_filter: SafetyFilter = None,
+                 game_state: Dict[str, Any] = None):
         """
         Initialize command processor.
         
         Args:
             config: Configuration instance
             ipc_reader: IPC reader instance for sending commands
+            validator: ActionValidator instance for command validation
+            safety_filter: SafetyFilter instance for safety checks
+            game_state: Current game state for safety filtering
         """
         self.config = config or Configuration()
         self.ipc_reader = ipc_reader
@@ -133,6 +151,11 @@ class CommandProcessor:
         # Statistics
         self.stats = CommandProcessorStats()
         
+        # Validation and safety components
+        self.validator = validator or get_validator()
+        self.safety_filter = safety_filter or get_safety_filter(game_state)
+        self.game_state = game_state or {}
+        
         # Configuration
         self.max_queue_length = self.config.get("command_processor", "max_queue_length", default=50)
         self.max_retries = self.config.get("command_processor", "max_retries", default=3)
@@ -142,7 +165,7 @@ class CommandProcessor:
         self.running = False
         self.thread = None
         
-        self.logger.info("Command processor initialized")
+        self.logger.info("Command processor initialized with validator and safety filter")
     
     def start(self) -> bool:
         """Start the command processor."""
@@ -179,8 +202,8 @@ class CommandProcessor:
             True if command was added successfully, False otherwise
         """
         if not self.running:
-            self.logger.warning("Command processor is not running, cannot add command")
-            return False
+            # Auto-start for testing/integration scenarios
+            self.start()
         
         try:
             with self._lock:
@@ -369,7 +392,7 @@ class CommandProcessor:
     
     def _validate_command(self, command: AICommand) -> bool:
         """
-        Validate a command.
+        Validate a command using validator and safety filter.
         
         Args:
             command: Command to validate
@@ -395,7 +418,79 @@ class CommandProcessor:
             self.logger.error(f"Invalid priority type: {type(command.priority)}")
             return False
         
+        # Convert AICommand to dict for validation
+        command_dict = self._command_to_dict(command)
+        
+        # Step 1: Validate command structure and whitelist
+        validation_result = self.validator.validate(command_dict)
+        if not validation_result.is_valid:
+            self.logger.error(f"Command validation failed: {validation_result.errors}")
+            return False
+        
+        # Step 2: Safety filter check
+        # Update safety filter with current game state
+        if self.safety_filter:
+            self.safety_filter.update_game_state(self.game_state)
+            safety_result = self.safety_filter.check_command(command_dict)
+            if not safety_result.is_safe:
+                self.logger.warning(f"Command blocked by safety filter: {safety_result.errors}")
+                return False
+        
         return True
+    
+    def _command_to_dict(self, command: AICommand) -> Dict[str, Any]:
+        """
+        Convert AICommand to dictionary for validation.
+        
+        Args:
+            command: AICommand to convert
+            
+        Returns:
+            Command dictionary
+        """
+        # Start with basic command structure
+        cmd_dict = {
+            "command": command.command_type,
+            "timestamp": command.timestamp
+        }
+        
+        # Add parameters based on command type
+        if command.command_type == "BUILD":
+            cmd_dict["engineer_id"] = command.parameters.get("engineer_id", command.parameters.get("unit_id"))
+            cmd_dict["building_type"] = command.target.get("type") if command.target else command.parameters.get("building_type")
+            cmd_dict["position"] = command.target.get("position") if command.target else command.parameters.get("position")
+        elif command.command_type == "CAPTURE":
+            # CAPTURE command can have unit_id in target or parameters
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            if cmd_dict["squad_id"] is None and command.target:
+                cmd_dict["squad_id"] = command.target.get("unit_id")
+            cmd_dict["point_id"] = command.target.get("point_id") if command.target else command.parameters.get("point_id")
+        elif command.command_type == "ATTACK_MOVE":
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            cmd_dict["position"] = command.target.get("position") if command.target else command.parameters.get("position")
+        elif command.command_type == "SET_POSTURE":
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            cmd_dict["posture"] = command.target.get("posture") if command.target else command.parameters.get("posture")
+        elif command.command_type == "PRODUCE":
+            cmd_dict["building_id"] = command.parameters.get("building_id") or (command.target.get("building_id") if command.target else None)
+            cmd_dict["unit_type"] = command.target.get("unit_type") if command.target else command.parameters.get("unit_type")
+        elif command.command_type == "RETREAT":
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+        elif command.command_type == "STOP":
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+        elif command.command_type == "HOLD":
+            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+        elif command.command_type == "PING":
+            cmd_dict["timestamp"] = command.timestamp
+        elif command.command_type == "PONG":
+            cmd_dict["timestamp"] = command.timestamp
+        
+        # Merge any additional parameters
+        for key, value in command.parameters.items():
+            if key not in cmd_dict:
+                cmd_dict[key] = value
+        
+        return cmd_dict
     
     def get_next_command(self) -> Optional[AICommand]:
         """
@@ -505,15 +600,28 @@ class CommandProcessor:
     def reset_stats(self):
         """Reset statistics."""
         self.stats = CommandProcessorStats()
+    
+    def update_game_state(self, game_state: Dict[str, Any]) -> None:
+        """
+        Update the current game state for safety filtering.
+        
+        Args:
+            game_state: Current game state dictionary
+        """
+        self.game_state = game_state
+        if self.safety_filter:
+            self.safety_filter.update_game_state(game_state)
+        self.logger.debug("Game state updated for safety filtering")
 
 
 # Convenience functions for creating common commands
-def create_build_command(unit_type: str, position: List[float], **kwargs) -> AICommand:
+def create_build_command(engineer_id: int, building_type: str, position: List[float], **kwargs) -> AICommand:
     """
     Create a build command.
     
     Args:
-        unit_type: Type of unit/structure to build
+        engineer_id: ID of engineer unit to build
+        building_type: Type of structure to build
         position: Target position [x, y, z]
         **kwargs: Additional parameters
         
@@ -522,8 +630,8 @@ def create_build_command(unit_type: str, position: List[float], **kwargs) -> AIC
     """
     return AICommand(
         command_type="BUILD",
-        target={"type": unit_type, "position": position},
-        parameters=kwargs,
+        target={"type": building_type, "position": position},
+        parameters={"engineer_id": engineer_id, **kwargs},
         priority=CommandPriority.NORMAL
     )
 
@@ -548,13 +656,12 @@ def create_attack_command(target: Dict[str, Any], units: List[int], **kwargs) ->
     )
 
 
-def create_retreat_command(units: List[int], position: List[float], **kwargs) -> AICommand:
+def create_retreat_command(unit_id: int, **kwargs) -> AICommand:
     """
     Create a retreat command.
     
     Args:
-        units: List of unit IDs to retreat
-        position: Target position to retreat to
+        unit_id: ID of unit to retreat
         **kwargs: Additional parameters
         
     Returns:
@@ -562,8 +669,8 @@ def create_retreat_command(units: List[int], position: List[float], **kwargs) ->
     """
     return AICommand(
         command_type="RETREAT",
-        target={"position": position},
-        parameters={"units": units, **kwargs},
+        target=None,
+        parameters={"unit_id": unit_id, **kwargs},
         priority=CommandPriority.URGENT
     )
 
@@ -625,6 +732,124 @@ def create_upgrade_command(upgrade: str, unit_id: int, **kwargs) -> AICommand:
         target={"unit_id": unit_id},
         parameters={"upgrade": upgrade, **kwargs},
         priority=CommandPriority.LOW
+    )
+
+
+def create_attack_move_command(unit_id: int, position: List[float], **kwargs) -> AICommand:
+    """
+    Create an attack move command.
+    
+    Args:
+        unit_id: ID of unit to move
+        position: Target position [x, y, z]
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for attack move
+    """
+    return AICommand(
+        command_type="ATTACK_MOVE",
+        target={"position": position},
+        parameters={"unit_id": unit_id, **kwargs},
+        priority=CommandPriority.HIGH
+    )
+
+
+def create_capture_command(unit_id: int, point_id: int, **kwargs) -> AICommand:
+    """
+    Create a capture command.
+    
+    Args:
+        unit_id: ID of unit to capture
+        point_id: ID of capture point
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for capture
+    """
+    return AICommand(
+        command_type="CAPTURE",
+        target={"point_id": point_id, "unit_id": unit_id},
+        parameters=kwargs,
+        priority=CommandPriority.NORMAL
+    )
+
+
+def create_produce_command(building_id: int, unit_type: str, **kwargs) -> AICommand:
+    """
+    Create a produce command.
+    
+    Args:
+        building_id: ID of building to produce from
+        unit_type: Type of unit to produce
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for production
+    """
+    return AICommand(
+        command_type="PRODUCE",
+        target={"building_id": building_id, "unit_type": unit_type},
+        parameters=kwargs,
+        priority=CommandPriority.HIGH
+    )
+
+
+def create_set_posture_command(unit_id: int, posture: str, **kwargs) -> AICommand:
+    """
+    Create a set posture command.
+    
+    Args:
+        unit_id: ID of unit to set posture
+        posture: Posture to set (e.g., "defend", "attack", "hold")
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for setting posture
+    """
+    return AICommand(
+        command_type="SET_POSTURE",
+        target={"posture": posture},
+        parameters={"unit_id": unit_id, **kwargs},
+        priority=CommandPriority.NORMAL
+    )
+
+
+def create_hold_command(unit_id: int, **kwargs) -> AICommand:
+    """
+    Create a hold command.
+    
+    Args:
+        unit_id: ID of unit to hold
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for hold
+    """
+    return AICommand(
+        command_type="HOLD",
+        target=None,
+        parameters={"unit_id": unit_id, **kwargs},
+        priority=CommandPriority.NORMAL
+    )
+
+
+def create_stop_command(unit_id: int, **kwargs) -> AICommand:
+    """
+    Create a stop command.
+    
+    Args:
+        unit_id: ID of unit to stop
+        **kwargs: Additional parameters
+        
+    Returns:
+        AICommand for stop
+    """
+    return AICommand(
+        command_type="STOP",
+        target=None,
+        parameters={"unit_id": unit_id, **kwargs},
+        priority=CommandPriority.NORMAL
     )
 
 

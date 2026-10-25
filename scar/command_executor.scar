@@ -1,0 +1,928 @@
+// ============================================
+// CoH1 × Mistral AI Mod - Command Executor
+// ============================================
+//
+// Executes game commands on behalf of the AI.
+// Provides a clean API for sending commands to units, buildings, and other game entities.
+//
+// This module contains the actual command execution logic that was previously
+// embedded in ipc.scar. It's extracted here for better separation of concerns
+// and to allow the reflex layer to use the same command execution patterns.
+//
+// Author: Generated via developer skill
+// Version: 1.0.0
+// Date: 2026-10-25
+//
+// Documentation: https://scardoc.coh.fi/
+// ============================================
+
+// ============================================
+// Configuration
+// ============================================
+
+-- Include configuration constants
+include("scar/config.scar")
+
+-- Command execution timing
+constant COMMAND_EXECUTION_TIMEOUT = 0.5  -- Maximum time to wait for command to execute
+constant COMMAND_QUEUE_MAX_SIZE = 10     -- Maximum pending commands per entity
+
+-- ============================================
+// Command Result Tracking
+// ============================================
+
+-- Track command execution statistics
+local commandStats = {
+    total_commands = 0,
+    successful = 0,
+    failed = 0,
+    by_type = {},
+    last_execution_time = 0,
+    execution_times = {}
+}
+
+-- Track pending commands to prevent spamming
+local pendingCommands = {}  -- entity_id -> {command_type -> count}
+
+// ============================================
+// Initialization
+// ============================================
+
+function InitializeCommandExecutor()
+{
+    Log("Initializing Command Executor")
+    
+    -- Reset statistics
+    commandStats = {
+        total_commands = 0,
+        successful = 0,
+        failed = 0,
+        by_type = {},
+        last_execution_time = GetTimestamp(),
+        execution_times = {}
+    }
+    
+    -- Reset pending commands
+    pendingCommands = {}
+    
+    Log("Command Executor initialized")
+    return true
+}
+
+-- ============================================
+-- Command Execution API
+-- ============================================
+
+-- Main command execution function
+-- Takes a command table with all required parameters and executes it
+function ExecuteCommand(command)
+{
+    if (command == null) then
+        Log("ERROR: Attempted to execute null command")
+        RecordCommandFailure("null")
+        return false
+    end
+    
+    local commandType = command.command
+    if (commandType == null or commandType == "") then
+        Log("ERROR: Command missing 'command' field")
+        RecordCommandFailure("unknown")
+        return false
+    end
+    
+    -- Record command attempt
+    RecordCommandAttempt(commandType)
+    
+    -- Route to appropriate handler
+    local success = false
+    
+    if (commandType == "BUILD" or commandType == CommandType.BUILD) then
+        success = ExecuteBuildCommand(command)
+    elseif (commandType == "CAPTURE" or commandType == CommandType.CAPTURE) then
+        success = ExecuteCaptureCommand(command)
+    elseif (commandType == "ATTACK_MOVE" or commandType == CommandType.ATTACK_MOVE) then
+        success = ExecuteAttackMoveCommand(command)
+    elseif (commandType == "SET_POSTURE" or commandType == CommandType.SET_POSTURE) then
+        success = ExecuteSetPostureCommand(command)
+    elseif (commandType == "PRODUCE" or commandType == CommandType.PRODUCE) then
+        success = ExecuteProduceCommand(command)
+    elseif (commandType == "RETREAT" or commandType == CommandType.RETREAT) then
+        success = ExecuteRetreatCommand(command)
+    elseif (commandType == "STOP" or commandType == CommandType.STOP) then
+        success = ExecuteStopCommand(command)
+    elseif (commandType == "HOLD" or commandType == CommandType.HOLD) then
+        success = ExecuteHoldCommand(command)
+    elseif (commandType == "PING" or commandType == CommandType.PING) then
+        success = ExecutePingCommand(command)
+    elseif (commandType == "PONG" or commandType == CommandType.PONG) then
+        success = ExecutePongCommand(command)
+    else
+        Log("ERROR: Unknown command type: " .. tostring(commandType))
+        RecordCommandFailure(commandType)
+        return false
+    end
+    
+    -- Record result
+    if (success) then
+        RecordCommandSuccess(commandType)
+    else
+        RecordCommandFailure(commandType)
+    end
+    
+    return success
+}
+
+-- ============================================
+-- Individual Command Handlers
+-- ============================================
+
+function ExecuteBuildCommand(command)
+{
+    local engineerId = command.engineer_id
+    local buildingType = command.building_type
+    local position = command.position
+    
+    -- Validate parameters
+    if (engineerId == null or buildingType == null or position == null) then
+        Log("ERROR: BUILD command missing required parameters")
+        return false
+    end
+    
+    -- Check for pending commands on this engineer
+    local entityKey = "engineer_" .. tostring(engineerId)
+    if (HasPendingCommands(entityKey, "BUILD")) then
+        Log("WARNING: Engineer " .. engineerId .. " has pending BUILD commands")
+        return false
+    end
+    
+    Log(string.format("BUILD command: engineer=%d, building=%s, pos=(%.1f,%.1f,%.1f)",
+        engineerId, buildingType, position[1], position[2], position[3]))
+    
+    -- Find engineer squad
+    local engineer = GetSquadById(engineerId)
+    if (engineer == null) then
+        Log("ERROR: Engineer squad " .. engineerId .. " not found")
+        return false
+    end
+    
+    -- Check if engineer is valid and can build
+    if (!engineer:IsValid() or !engineer:CanBuild()) then
+        Log("ERROR: Engineer squad " .. engineerId .. " cannot build")
+        return false
+    end
+    
+    -- Execute build command
+    local startTime = GetTimestamp()
+    local success = engineer:Build(buildingType, position[1], position[2], position[3])
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("BUILD", executionTime)
+    
+    if (success) then
+        Log("BUILD command executed successfully")
+        TrackPendingCommand(entityKey, "BUILD")
+        return true
+    else
+        Log("ERROR: BUILD command failed for engineer " .. engineerId)
+        return false
+    end
+}
+
+function ExecuteCaptureCommand(command)
+{
+    local squadId = command.squad_id
+    local pointId = command.point_id
+    
+    -- Validate parameters
+    if (squadId == null or pointId == null) then
+        Log("ERROR: CAPTURE command missing required parameters")
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "CAPTURE")) then
+        Log("WARNING: Squad " .. squadId .. " has pending CAPTURE commands")
+        return false
+    end
+    
+    Log(string.format("CAPTURE command: squad=%d, point=%d", squadId, pointId))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for CAPTURE")
+        return false
+    end
+    
+    -- Check if squad is valid
+    if (!squad:IsValid()) then
+        Log("ERROR: Squad " .. squadId .. " is not valid")
+        return false
+    end
+    
+    -- Find capture point
+    local cp = GetCapturePointById(pointId)
+    if (cp == null) then
+        Log("ERROR: Capture point " .. pointId .. " not found")
+        return false
+    end
+    
+    -- Execute capture command
+    local startTime = GetTimestamp()
+    local success = squad:Capture(cp)
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("CAPTURE", executionTime)
+    
+    if (success) then
+        Log("CAPTURE command executed successfully")
+        TrackPendingCommand(entityKey, "CAPTURE")
+        return true
+    else
+        Log("ERROR: CAPTURE command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecuteAttackMoveCommand(command)
+{
+    local squadId = command.squad_id
+    local position = command.position
+    
+    -- Validate parameters
+    if (squadId == null or position == null) then
+        Log("ERROR: ATTACK_MOVE command missing required parameters")
+        return false
+    end
+    
+    -- Validate position has 3 coordinates
+    if (#position < 3) then
+        Log("ERROR: ATTACK_MOVE command has invalid position (needs x,y,z)")
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "ATTACK_MOVE")) then
+        Log("WARNING: Squad " .. squadId .. " has pending ATTACK_MOVE commands")
+        return false
+    end
+    
+    Log(string.format("ATTACK_MOVE command: squad=%d, pos=(%.1f,%.1f,%.1f)",
+        squadId, position[1], position[2], position[3]))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for ATTACK_MOVE")
+        return false
+    end
+    
+    -- Check if squad is valid and can move
+    if (!squad:IsValid() or !squad:CanMove()) then
+        Log("ERROR: Squad " .. squadId .. " cannot move")
+        return false
+    end
+    
+    -- Execute attack move command
+    local startTime = GetTimestamp()
+    local success = squad:AttackMove(position[1], position[2], position[3])
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("ATTACK_MOVE", executionTime)
+    
+    if (success) then
+        Log("ATTACK_MOVE command executed successfully")
+        TrackPendingCommand(entityKey, "ATTACK_MOVE")
+        return true
+    else
+        Log("ERROR: ATTACK_MOVE command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecuteSetPostureCommand(command)
+{
+    local squadId = command.squad_id
+    local posture = command.posture
+    
+    -- Validate parameters
+    if (squadId == null or posture == null) then
+        Log("ERROR: SET_POSTURE command missing required parameters")
+        return false
+    end
+    
+    -- Validate posture is valid
+    local validPostures = {
+        ["aggressive"] = true,
+        ["defensive"] = true,
+        ["retreat"] = true,
+        ["hold"] = true
+    }
+    
+    if (!validPostures[posture:lower()]) then
+        Log("ERROR: Invalid posture: " .. posture)
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "SET_POSTURE")) then
+        Log("WARNING: Squad " .. squadId .. " has pending SET_POSTURE commands")
+        return false
+    end
+    
+    Log(string.format("SET_POSTURE command: squad=%d, posture=%s", squadId, posture))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for SET_POSTURE")
+        return false
+    end
+    
+    -- Check if squad is valid
+    if (!squad:IsValid()) then
+        Log("ERROR: Squad " .. squadId .. " is not valid")
+        return false
+    end
+    
+    -- Execute posture change
+    local startTime = GetTimestamp()
+    local success = squad:SetPosture(posture)
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("SET_POSTURE", executionTime)
+    
+    if (success) then
+        Log("SET_POSTURE command executed successfully")
+        TrackPendingCommand(entityKey, "SET_POSTURE")
+        return true
+    else
+        Log("ERROR: SET_POSTURE command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecuteProduceCommand(command)
+{
+    local buildingId = command.building_id
+    local unitType = command.unit_type
+    
+    -- Validate parameters
+    if (buildingId == null or unitType == null) then
+        Log("ERROR: PRODUCE command missing required parameters")
+        return false
+    end
+    
+    -- Check for pending commands on this building
+    local entityKey = "building_" .. tostring(buildingId)
+    if (HasPendingCommands(entityKey, "PRODUCE")) then
+        Log("WARNING: Building " .. buildingId .. " has pending PRODUCE commands")
+        return false
+    end
+    
+    Log(string.format("PRODUCE command: building=%d, unit=%s", buildingId, unitType))
+    
+    -- Find building
+    local building = GetBuildingById(buildingId)
+    if (building == null) then
+        Log("ERROR: Building " .. buildingId .. " not found for PRODUCE")
+        return false
+    end
+    
+    -- Check if building is valid and can produce
+    if (!building:IsValid() or !building:CanProduce()) then
+        Log("ERROR: Building " .. buildingId .. " cannot produce")
+        return false
+    end
+    
+    -- Execute production
+    local startTime = GetTimestamp()
+    local success = building:Produce(unitType)
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("PRODUCE", executionTime)
+    
+    if (success) then
+        Log("PRODUCE command executed successfully")
+        TrackPendingCommand(entityKey, "PRODUCE")
+        return true
+    else
+        Log("ERROR: PRODUCE command failed for building " .. buildingId)
+        return false
+    end
+}
+
+function ExecuteRetreatCommand(command)
+{
+    local squadId = command.squad_id
+    
+    -- Validate parameters
+    if (squadId == null) then
+        Log("ERROR: RETREAT command missing squad_id")
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "RETREAT")) then
+        Log("WARNING: Squad " .. squadId .. " has pending RETREAT commands")
+        return false
+    end
+    
+    Log(string.format("RETREAT command: squad=%d", squadId))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for RETREAT")
+        return false
+    end
+    
+    -- Check if squad is valid
+    if (!squad:IsValid()) then
+        Log("ERROR: Squad " .. squadId .. " is not valid")
+        return false
+    end
+    
+    -- Execute retreat
+    local startTime = GetTimestamp()
+    local success = squad:Retreat()
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("RETREAT", executionTime)
+    
+    if (success) then
+        Log("RETREAT command executed successfully")
+        TrackPendingCommand(entityKey, "RETREAT")
+        return true
+    else
+        Log("ERROR: RETREAT command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecuteStopCommand(command)
+{
+    local squadId = command.squad_id
+    
+    -- Validate parameters
+    if (squadId == null) then
+        Log("ERROR: STOP command missing squad_id")
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "STOP")) then
+        Log("WARNING: Squad " .. squadId .. " has pending STOP commands")
+        return false
+    end
+    
+    Log(string.format("STOP command: squad=%d", squadId))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for STOP")
+        return false
+    end
+    
+    -- Check if squad is valid
+    if (!squad:IsValid()) then
+        Log("ERROR: Squad " .. squadId .. " is not valid")
+        return false
+    end
+    
+    -- Execute stop
+    local startTime = GetTimestamp()
+    local success = squad:Stop()
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("STOP", executionTime)
+    
+    if (success) then
+        Log("STOP command executed successfully")
+        TrackPendingCommand(entityKey, "STOP")
+        return true
+    else
+        Log("ERROR: STOP command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecuteHoldCommand(command)
+{
+    local squadId = command.squad_id
+    
+    -- Validate parameters
+    if (squadId == null) then
+        Log("ERROR: HOLD command missing squad_id")
+        return false
+    end
+    
+    -- Check for pending commands on this squad
+    local entityKey = "squad_" .. tostring(squadId)
+    if (HasPendingCommands(entityKey, "HOLD")) then
+        Log("WARNING: Squad " .. squadId .. " has pending HOLD commands")
+        return false
+    end
+    
+    Log(string.format("HOLD command: squad=%d", squadId))
+    
+    -- Find squad
+    local squad = GetSquadById(squadId)
+    if (squad == null) then
+        Log("ERROR: Squad " .. squadId .. " not found for HOLD")
+        return false
+    end
+    
+    -- Check if squad is valid
+    if (!squad:IsValid()) then
+        Log("ERROR: Squad " .. squadId .. " is not valid")
+        return false
+    end
+    
+    -- Execute hold
+    local startTime = GetTimestamp()
+    local success = squad:HoldPosition()
+    
+    -- Record execution time
+    local executionTime = GetTimestamp() - startTime
+    RecordExecutionTime("HOLD", executionTime)
+    
+    if (success) then
+        Log("HOLD command executed successfully")
+        TrackPendingCommand(entityKey, "HOLD")
+        return true
+    else
+        Log("ERROR: HOLD command failed for squad " .. squadId)
+        return false
+    end
+}
+
+function ExecutePingCommand(command)
+{
+    Log("PING command received")
+    return true
+}
+
+function ExecutePongCommand(command)
+{
+    Log("PONG command received")
+    return true
+}
+
+-- ============================================
+-- Convenience Functions for Direct Execution
+-- ============================================
+
+-- These functions allow direct execution without creating a full command table
+-- Useful for reflex layer and other internal SCAR code
+
+function Build(engineerId, buildingType, x, y, z)
+{
+    return ExecuteBuildCommand({
+        command = "BUILD",
+        engineer_id = engineerId,
+        building_type = buildingType,
+        position = {x, y, z}
+    })
+}
+
+function Capture(squadId, pointId)
+{
+    return ExecuteCaptureCommand({
+        command = "CAPTURE",
+        squad_id = squadId,
+        point_id = pointId
+    })
+}
+
+function AttackMove(squadId, x, y, z)
+{
+    return ExecuteAttackMoveCommand({
+        command = "ATTACK_MOVE",
+        squad_id = squadId,
+        position = {x, y, z}
+    })
+}
+
+function SetPosture(squadId, posture)
+{
+    return ExecuteSetPostureCommand({
+        command = "SET_POSTURE",
+        squad_id = squadId,
+        posture = posture
+    })
+}
+
+function Produce(buildingId, unitType)
+{
+    return ExecuteProduceCommand({
+        command = "PRODUCE",
+        building_id = buildingId,
+        unit_type = unitType
+    })
+}
+
+function Retreat(squadId)
+{
+    return ExecuteRetreatCommand({
+        command = "RETREAT",
+        squad_id = squadId
+    })
+}
+
+function Stop(squadId)
+{
+    return ExecuteStopCommand({
+        command = "STOP",
+        squad_id = squadId
+    })
+}
+
+function Hold(squadId)
+{
+    return ExecuteHoldCommand({
+        command = "HOLD",
+        squad_id = squadId
+    })
+}
+
+-- ============================================
+-- Entity Lookup Functions
+-- ============================================
+
+function GetSquadById(squadId)
+{
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then
+        return null
+    end
+    
+    local squads = player:GetSquads()
+    if (squads == null) then
+        return null
+    end
+    
+    for i = 1, #squads do
+        local squad = squads[i]
+        if (squad ~= null and squad:IsValid() and squad:GetId() == squadId) then
+            return squad
+        end
+    end
+    
+    return null
+}
+
+function GetCapturePointById(cpId)
+{
+    local map = ebx:Game.GetMap()
+    if (map == null) then
+        return null
+    end
+    
+    local cps = map:GetCapturePoints()
+    if (cps == null) then
+        return null
+    end
+    
+    for i = 1, #cps do
+        local cp = cps[i]
+        if (cp ~= null and cp:GetId() == cpId) then
+            return cp
+        end
+    end
+    
+    return null
+}
+
+function GetBuildingById(buildingId)
+{
+    local player = GetLocalPlayer()
+    if (!IsValidPlayer(player)) then
+        return null
+    end
+    
+    local buildings = player:GetBuildings()
+    if (buildings == null) then
+        return null
+    end
+    
+    for i = 1, #buildings do
+        local building = buildings[i]
+        if (building ~= null and building:IsValid() and building:GetId() == buildingId) then
+            return building
+        end
+    end
+    
+    return null
+}
+
+-- ============================================
+-- Statistics Tracking
+-- ============================================
+
+function GetCommandStatistics()
+{
+    return {
+        total_commands = commandStats.total_commands,
+        successful = commandStats.successful,
+        failed = commandStats.failed,
+        success_rate = commandStats.total_commands > 0 
+            and (commandStats.successful / commandStats.total_commands) or 0,
+        by_type = commandStats.by_type,
+        average_execution_time = CalculateAverageExecutionTime()
+    }
+}
+
+function RecordCommandAttempt(commandType)
+{
+    commandStats.total_commands = commandStats.total_commands + 1
+    commandStats.by_type[commandType] = (commandStats.by_type[commandType] or 0) + 1
+    commandStats.last_execution_time = GetTimestamp()
+end
+
+function RecordCommandSuccess(commandType)
+{
+    commandStats.successful = commandStats.successful + 1
+end
+
+function RecordCommandFailure(commandType)
+{
+    commandStats.failed = commandStats.failed + 1
+end
+
+function RecordExecutionTime(commandType, time)
+{
+    if (commandStats.execution_times[commandType] == null) then
+        commandStats.execution_times[commandType] = {}
+    end
+    
+    table.insert(commandStats.execution_times[commandType], time)
+    
+    -- Keep only last 100 executions to prevent memory bloat
+    if (#commandStats.execution_times[commandType] > 100) then
+        table.remove(commandStats.execution_times[commandType], 1)
+    end
+end
+
+function CalculateAverageExecutionTime()
+{
+    local total = 0
+    local count = 0
+    
+    for commandType, times in pairs(commandStats.execution_times) do
+        for i = 1, #times do
+            total = total + times[i]
+            count = count + 1
+        end
+    end
+    
+    return count > 0 and (total / count) or 0
+end
+
+function GetExecutionTimes(commandType)
+{
+    return commandStats.execution_times[commandType] or {}
+end
+
+-- ============================================
+-- Pending Command Tracking
+-- ============================================
+
+function HasPendingCommands(entityKey, commandType)
+{
+    local entityCommands = pendingCommands[entityKey]
+    if (entityCommands == null) then
+        return false
+    end
+    
+    local count = entityCommands[commandType] or 0
+    return count >= COMMAND_QUEUE_MAX_SIZE
+end
+
+function TrackPendingCommand(entityKey, commandType)
+{
+    if (pendingCommands[entityKey] == null) then
+        pendingCommands[entityKey] = {}
+    end
+    
+    pendingCommands[entityKey][commandType] = (pendingCommands[entityKey][commandType] or 0) + 1
+end
+
+function ClearPendingCommand(entityKey, commandType)
+{
+    if (pendingCommands[entityKey] ~= null) then
+        pendingCommands[entityKey][commandType] = (pendingCommands[entityKey][commandType] or 1) - 1
+        
+        -- Clean up if zero
+        if (pendingCommands[entityKey][commandType] <= 0) then
+            pendingCommands[entityKey][commandType] = nil
+        end
+        
+        -- Clean up entity if no commands
+        if (next(pendingCommands[entityKey]) == nil) then
+            pendingCommands[entityKey] = nil
+        end
+    end
+}
+
+function ClearAllPendingCommands()
+{
+    pendingCommands = {}
+end
+
+-- ============================================
+-- Utility Functions
+-- ============================================
+
+function GetLocalPlayer()
+{
+    if (ebx ~= null and ebx.Game ~= null and ebx.Game.GetLocalPlayer ~= null) then
+        return ebx:Game.GetLocalPlayer()
+    end
+    return nil
+end
+
+function IsValidPlayer(player)
+{
+    if (player == null) then
+        return false
+    end
+    
+    if (player.IsValid ~= null) then
+        return player:IsValid()
+    end
+    
+    return true
+end
+
+function GetTimestamp()
+{
+    if (ebx ~= null and ebx.System ~= null and ebx.System.GetTime ~= null) then
+        return ebx:System.GetTime()
+    end
+    
+    -- Fallback: use os.time() if available
+    if (os ~= null and os.time ~= null) then
+        return os.time()
+    end
+    
+    return 0
+end
+
+-- ============================================
+-- For testing without SCAR environment
+-- ============================================
+
+-- If running in standalone test mode
+if (_G.TestMode ~= null and _G.TestMode == true) then
+    -- Mock functions for testing
+    function GetSquadById(squadId)
+        return {
+            IsValid = function() return true end,
+            GetId = function() return squadId end,
+            GetHealth = function() return 100 end,
+            GetMaxHealth = function() return 100 end,
+            GetPosition = function() return {x=0, y=0, z=0} end,
+            UnderFire = function() return false end,
+            IsSuppressed = function() return false end,
+            IsPinned = function() return false end,
+            CanMove = function() return true end,
+            CanBuild = function() return true end,
+            Build = function(buildingType, x, y, z) return true end,
+            Capture = function(cp) return true end,
+            AttackMove = function(x, y, z) return true end,
+            SetPosture = function(posture) return true end,
+            Retreat = function() return true end,
+            Stop = function() return true end,
+            HoldPosition = function() return true end
+        }
+    end
+    
+    function GetCapturePointById(cpId)
+        return {
+            GetId = function() return cpId end
+        }
+    end
+    
+    function GetBuildingById(buildingId)
+        return {
+            IsValid = function() return true end,
+            GetId = function() return buildingId end,
+            CanProduce = function() return true end,
+            Produce = function(unitType) return true end
+        }
+    end
+end

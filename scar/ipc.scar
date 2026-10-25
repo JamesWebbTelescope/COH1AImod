@@ -7,11 +7,14 @@
 // Reads commands from file to execute in game.
 //
 // Author: Generated via planner skill
-// Version: 0.2.0
-// Date: 2026-10-04
+// Version: 0.3.0
+// Date: 2026-10-25
 //
 // Documentation: https://scardoc.coh.fi/
 // ============================================
+
+// Include command executor for command processing
+include("scar/command_executor.scar")
 
 // ============================================
 // Configuration - Matches Python config
@@ -236,7 +239,7 @@ function ShouldWriteState()
 }
 
 // ============================================
-// Command Reading
+// Command Reading and Processing
 // ============================================
 
 local lastCommandReadTime = 0
@@ -295,313 +298,21 @@ function ReadCommands()
 
 function ProcessCommand(command)
 {
-    if (command == null) {
-        return false
-    }
-    
-    local commandType = command.command
-    if (commandType == null) {
-        Log("WARNING: Command missing 'command' field")
-        return false
-    }
-    
-    Log("Processing command: " .. commandType)
-    
-    -- Route command to appropriate handler
-    if (commandType == "BUILD") {
-        return HandleBuildCommand(command)
-    } elseif (commandType == "CAPTURE") {
-        return HandleCaptureCommand(command)
-    } elseif (commandType == "ATTACK_MOVE") {
-        return HandleAttackMoveCommand(command)
-    } elseif (commandType == "SET_POSTURE") {
-        return HandleSetPostureCommand(command)
-    } elseif (commandType == "PRODUCE") {
-        return HandleProduceCommand(command)
-    } elseif (commandType == "RETREAT") {
-        return HandleRetreatCommand(command)
-    } elseif (commandType == "STOP") {
-        return HandleStopCommand(command)
-    } elseif (commandType == "HOLD") {
-        return HandleHoldCommand(command)
-    } elseif (commandType == "PING") {
-        return HandlePingCommand(command)
-    } else {
-        Log("WARNING: Unknown command type: " .. commandType)
-        return false
-    }
+    -- Delegate to command executor
+    return ExecuteCommand(command)
 }
 
 // ============================================
-// Command Handlers
-// ============================================
+-- Special PING/PONG handling for IPC health check
+-- ============================================
 
-function HandleBuildCommand(command)
+function SendPongResponse(timestamp)
 {
-    local engineerId = command.engineer_id
-    local buildingType = command.building_type
-    local position = command.position
-    
-    if (engineerId == null or buildingType == null or position == null) then
-        Log("ERROR: BUILD command missing required parameters")
-        return false
-    end
-    
-    Log(string.format("BUILD command: engineer=%d, building=%s, pos=(%d,%d,%d)",
-        engineerId, buildingType, position[1], position[2], position[3]))
-    
-    -- Find engineer squad
-    local engineer = GetSquadById(engineerId)
-    if (engineer == null) then
-        Log("ERROR: Engineer squad not found")
-        return false
-    end
-    
-    -- Execute build command
-    local success = engineer:Build(buildingType, position[1], position[2], position[3])
-    
-    if (success) then
-        Log("BUILD command executed successfully")
-    else
-        Log("ERROR: BUILD command failed")
-    end
-    
-    return success
-}
-
-function HandleCaptureCommand(command)
-{
-    local squadId = command.squad_id
-    local pointId = command.point_id
-    
-    if (squadId == null or pointId == null) then
-        Log("ERROR: CAPTURE command missing required parameters")
-        return false
-    end
-    
-    Log(string.format("CAPTURE command: squad=%d, point=%d", squadId, pointId))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for CAPTURE")
-        return false
-    end
-    
-    -- Find capture point
-    local cp = GetCapturePointById(pointId)
-    if (cp == null) then
-        Log("ERROR: Capture point not found")
-        return false
-    end
-    
-    -- Execute capture command
-    local success = squad:Capture(cp)
-    
-    if (success) then
-        Log("CAPTURE command executed successfully")
-    else
-        Log("ERROR: CAPTURE command failed")
-    end
-    
-    return success
-}
-
-function HandleAttackMoveCommand(command)
-{
-    local squadId = command.squad_id
-    local position = command.position
-    
-    if (squadId == null or position == null) then
-        Log("ERROR: ATTACK_MOVE command missing required parameters")
-        return false
-    end
-    
-    Log(string.format("ATTACK_MOVE command: squad=%d, pos=(%d,%d,%d)",
-        squadId, position[1], position[2], position[3]))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for ATTACK_MOVE")
-        return false
-    end
-    
-    -- Execute attack move
-    local success = squad:AttackMove(position[1], position[2], position[3])
-    
-    if (success) then
-        Log("ATTACK_MOVE command executed successfully")
-    else
-        Log("ERROR: ATTACK_MOVE command failed")
-    end
-    
-    return success
-}
-
-function HandleSetPostureCommand(command)
-{
-    local squadId = command.squad_id
-    local posture = command.posture
-    
-    if (squadId == null or posture == null) then
-        Log("ERROR: SET_POSTURE command missing required parameters")
-        return false
-    end
-    
-    Log(string.format("SET_POSTURE command: squad=%d, posture=%s", squadId, posture))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for SET_POSTURE")
-        return false
-    end
-    
-    -- Execute posture change
-    local success = squad:SetPosture(posture)
-    
-    if (success) then
-        Log("SET_POSTURE command executed successfully")
-    else
-        Log("ERROR: SET_POSTURE command failed")
-    end
-    
-    return success
-}
-
-function HandleProduceCommand(command)
-{
-    local buildingId = command.building_id
-    local unitType = command.unit_type
-    
-    if (buildingId == null or unitType == null) then
-        Log("ERROR: PRODUCE command missing required parameters")
-        return false
-    end
-    
-    Log(string.format("PRODUCE command: building=%d, unit=%s", buildingId, unitType))
-    
-    -- Find building
-    local building = GetBuildingById(buildingId)
-    if (building == null) then
-        Log("ERROR: Building not found for PRODUCE")
-        return false
-    end
-    
-    -- Execute production
-    local success = building:Produce(unitType)
-    
-    if (success) then
-        Log("PRODUCE command executed successfully")
-    else
-        Log("ERROR: PRODUCE command failed")
-    end
-    
-    return success
-}
-
-function HandleRetreatCommand(command)
-{
-    local squadId = command.squad_id
-    
-    if (squadId == null) then
-        Log("ERROR: RETREAT command missing squad_id")
-        return false
-    end
-    
-    Log(string.format("RETREAT command: squad=%d", squadId))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for RETREAT")
-        return false
-    end
-    
-    -- Execute retreat
-    local success = squad:Retreat()
-    
-    if (success) then
-        Log("RETREAT command executed successfully")
-    else
-        Log("ERROR: RETREAT command failed")
-    end
-    
-    return success
-}
-
-function HandleStopCommand(command)
-{
-    local squadId = command.squad_id
-    
-    if (squadId == null) then
-        Log("ERROR: STOP command missing squad_id")
-        return false
-    end
-    
-    Log(string.format("STOP command: squad=%d", squadId))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for STOP")
-        return false
-    end
-    
-    -- Execute stop
-    local success = squad:Stop()
-    
-    if (success) then
-        Log("STOP command executed successfully")
-    else
-        Log("ERROR: STOP command failed")
-    end
-    
-    return success
-}
-
-function HandleHoldCommand(command)
-{
-    local squadId = command.squad_id
-    
-    if (squadId == null) then
-        Log("ERROR: HOLD command missing squad_id")
-        return false
-    end
-    
-    Log(string.format("HOLD command: squad=%d", squadId))
-    
-    -- Find squad
-    local squad = GetSquadById(squadId)
-    if (squad == null) then
-        Log("ERROR: Squad not found for HOLD")
-        return false
-    end
-    
-    -- Execute hold
-    local success = squad:HoldPosition()
-    
-    if (success) then
-        Log("HOLD command executed successfully")
-    else
-        Log("ERROR: HOLD command failed")
-    end
-    
-    return success
-}
-
-function HandlePingCommand(command)
-{
-    Log("PING command received")
-    
-    -- Send PONG response
     local pongCommand = {
         command = "PONG",
-        timestamp = command.timestamp or GetTimestamp()
+        timestamp = timestamp or GetTimestamp()
     }
     
-    -- Write pong response
     local response = {
         commands = {pongCommand}
     }
@@ -618,78 +329,8 @@ function HandlePingCommand(command)
 }
 
 // ============================================
-// Helper Functions
-// ============================================
-
-function GetSquadById(squadId)
-{
-    local player = GetLocalPlayer()
-    if (!IsValidPlayer(player)) then
-        return null
-    end
-    
-    local squads = player:GetSquads()
-    if (squads == null) then
-        return null
-    end
-    
-    for i = 1, #squads do
-        local squad = squads[i]
-        if (squad:GetId() == squadId) then
-            return squad
-        end
-    end
-    
-    return null
-}
-
-function GetCapturePointById(cpId)
-{
-    local map = ebx:Game.GetMap()
-    if (map == null) then
-        return null
-    end
-    
-    local cps = map:GetCapturePoints()
-    if (cps == null) then
-        return null
-    end
-    
-    for i = 1, #cps do
-        local cp = cps[i]
-        if (cp:GetId() == cpId) then
-            return cp
-        end
-    end
-    
-    return null
-}
-
-function GetBuildingById(buildingId)
-{
-    local player = GetLocalPlayer()
-    if (!IsValidPlayer(player)) then
-        return null
-    end
-    
-    local buildings = player:GetBuildings()
-    if (buildings == null) then
-        return null
-    end
-    
-    for i = 1, #buildings do
-        local building = buildings[i]
-        if (building:GetId() == buildingId) then
-            return building
-        end
-    end
-    
-    return null
-}
-
-// ============================================
-// Main IPC Update Function
-// ============================================
+-- Main IPC Update Function
+-- ============================================
 
 function UpdateIPC(deltaTime)
 {
@@ -716,12 +357,18 @@ function UpdateIPC(deltaTime)
 }
 
 // ============================================
-// Initialization
-// ============================================
+-- Initialization
+-- ============================================
 
 function InitializeIPC()
 {
     Log("Initializing IPC system")
+    
+    -- Initialize command executor
+    if (!InitializeCommandExecutor()) then
+        Log("ERROR: Failed to initialize command executor")
+        return false
+    end
     
     -- Ensure data directory exists
     EnsureDirectoryExists(DATA_DIR)

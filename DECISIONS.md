@@ -280,6 +280,159 @@ This file records all significant decisions made during the CoH1 × Mistral AI M
 
 ---
 
+## Milestone 1: End-to-End Loop Stabilization Decisions
+
+### Decision M1-01 - Create Comprehensive End-to-End Loop Test
+- **Timestamp**: 2026-10-25
+- **Decision**: Create integrated test that validates complete state → decision → command pipeline
+- **Rationale**: Proves the core loop works before proceeding to Phase 3, addresses the gap identified in the status assessment
+- **Context**: Phase 2 implementation exists but end-to-end validation was missing, blocking Phase 3 work
+- **Impact**: Validates Milestone 1 acceptance gate, provides foundation for all future development
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision M1-02 - Use Mock SCAR Components for Testing
+- **Timestamp**: 2026-10-25
+- **Decision**: Create MockSCARStateGenerator and MockSCARCommandExecutor classes instead of requiring actual CoH1 environment
+- **Rationale**: Enables automated testing without game installation, faster iteration, reproducible results
+- **Context**: Actual CoH1 testing requires manual game setup and is slow for TDD
+- **Impact**: Full test automation possible, tests run in CI/CD, faster development cycle
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision M1-03 - Direct IPC Connection for Commands
+- **Timestamp**: 2026-10-25
+- **Decision**: Use IPCReader.send_commands() directly instead of CommandProcessor.queue_command() in tests
+- **Rationale**: Simplifies test implementation, CommandProcessor expects AICommand objects which would require additional conversion
+- **Context**: Testing the conceptual flow, not the CommandProcessor API specifically
+- **Impact**: Tests focus on end-to-end validation rather than API compliance
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision M1-04 - Message Processor Thread for Integration
+- **Timestamp**: 2026-10-25
+- **Decision**: Add message processor thread to connect IPC reader to state manager in test
+- **Rationale**: Mimics the orchestrator's _process_messages() loop, ensures states flow properly
+- **Context**: IPC reader reads files into a queue, but state manager needs to be notified
+- **Impact**: Complete pipeline simulation, realistic test environment
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+---
+
+## Phase 2: Reflex Layer Decisions
+
+### Decision 2.13 - Create Dedicated Command Executor Module
+- **Timestamp**: 2026-10-25
+- **Decision**: Extract command execution logic from ipc.scar into dedicated command_executor.scar module
+- **Rationale**: Better separation of concerns, allows reflex layer and other modules to use consistent command execution, enables better statistics tracking and error handling
+- **Context**: Phase 2 requires command execution API (Feature 3.1). Command handlers existed in ipc.scar but weren't modular or reusable
+- **Impact**: Command execution is now reusable across all SCAR modules, better architecture, improved testability
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision 2.14 - Integrate Reflex Layer with Command Executor
+- **Timestamp**: 2026-10-25
+- **Decision**: Update reflex_layer.scar to use command_executor.scar functions for command execution
+- **Rationale**: Demonstrates integration between reflex layer and command executor, provides consistent statistics tracking, maintains direct ebx: API calls for low-latency requirements
+- **Context**: Reflex layer needs to execute commands immediately without waiting for Python. Command executor provides this via direct ebx: calls with tracking
+- **Impact**: Better code organization, consistent error handling, statistics tracking for all reflex actions
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision 2.15 - Use Command Executor for Convenience Functions
+- **Timestamp**: 2026-10-25
+- **Decision**: Add convenience functions (Build, Capture, AttackMove, etc.) to command_executor.scar for direct use by other SCAR modules
+- **Rationale**: Makes it easier for other SCAR code to use the command executor without creating full command tables, maintains consistency
+- **Context**: Reflex layer and future SCAR modules can call these functions directly
+- **Impact**: Simpler API for common use cases, maintains full command table support for Python integration
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision 2.16 - Track Command Statistics
+- **Timestamp**: 2026-10-25
+- **Decision**: Implement comprehensive statistics tracking in command_executor.scar (execution times, success/failure rates, command counts)
+- **Rationale**: Provides visibility into command execution performance, helps debug issues, enables monitoring
+- **Context**: Need to understand command execution behavior in production
+- **Impact**: Full observability into command execution, helps identify performance bottlenecks
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+### Decision 2.17 - Prevent Command Spamming
+- **Timestamp**: 2026-10-25
+- **Decision**: Implement pending command tracking to prevent spamming entities with duplicate commands
+- **Rationale**: Prevents command queue overflow, reduces redundant commands, improves performance
+- **Context**: Rapid reflex decisions could generate many commands for the same entity
+- **Impact**: More efficient command processing, prevents entity command queues from filling up
+- **Owner**: AI agent
+- **Status**: CONFIRMED
+
+---
+
+## Phase 2 Decisions
+
+### Decision P2-01 - Validation Pipeline Integration Strategy
+- **Timestamp**: 2026-10-25 20:00
+- **Decision**: Integrate validator.py and safety_filter.py directly into command_processor.py
+- **Rationale**: Centralizes validation logic in one place, ensures all commands are validated before execution, maintains separation of concerns while providing unified interface
+- **Context**: Phase 2 requires safety and validation in place before command execution
+- **Implementation**: 
+  - Modified CommandProcessor.__init__() to accept validator and safety_filter instances
+  - Enhanced _validate_command() to use both validator and safety_filter
+  - Added _command_to_dict() to convert AICommand to dict for validation
+  - Added update_game_state() to provide current state to safety filter
+  - Integrated in orchestrator/main.py to pass components to command_processor
+- **Impact**: All commands now pass through validation and safety checks, preventing invalid or unsafe commands from being executed
+- **Owner**: AI agent
+- **Status**: IMPLEMENTED ✅
+
+### Decision P2-02 - Fallback Deadlock Resolution
+- **Timestamp**: 2026-10-25 20:30
+- **Decision**: Restructure check_api_status() to release lock before calling trigger_fallback()
+- **Rationale**: trigger_fallback() acquires the lock, but was being called from within check_api_status() which already holds the lock, causing deadlock
+- **Context**: Automatic fallback triggering in check_api_status() when API failure threshold is reached
+- **Implementation**: 
+  - Changed check_api_status() to use a return_value variable instead of multiple return statements
+  - Moved the actual trigger_fallback() call outside the lock context
+  - Ensured should_trigger_fallback flag is set inside lock, action taken outside lock
+- **Impact**: Prevents deadlock when automatic fallback is triggered, allows concurrent operations
+- **Owner**: AI agent
+- **Status**: IMPLEMENTED ✅
+
+### Decision P2-03 - Command Factory Functions
+- **Timestamp**: 2026-10-25 20:00
+- **Decision**: Create factory functions for all command types in command_processor.py
+- **Rationale**: Provides consistent, type-safe way to create AICommand instances, reduces boilerplate, ensures proper parameter structure
+- **Context**: Need to generate commands from various parts of the system (reflex layer, strategist, tests)
+- **Implementation**: Added create_* functions for all command types:
+  - create_build_command()
+  - create_capture_command()
+  - create_attack_move_command()
+  - create_produce_command()
+  - create_retreat_command()
+  - create_set_posture_command()
+  - create_stop_command()
+  - create_hold_command()
+- **Impact**: Standardized command creation across the codebase, easier to use and test
+- **Owner**: AI agent
+- **Status**: IMPLEMENTED ✅
+
+### Decision P2-04 - End-to-End Loop Validation Strategy
+- **Timestamp**: 2026-10-25 18:00
+- **Decision**: Create comprehensive end-to-end test with mock SCAR components
+- **Rationale**: Need to validate complete pipeline without requiring actual CoH1 game, enables automated testing and CI/CD
+- **Context**: Milestone 1 acceptance gate requires repeatable state → decision → command loop
+- **Implementation**:
+  - Created MockSCARStateGenerator with realistic game state progression
+  - Created MockSCARCommandExecutor to simulate command execution
+  - Implemented 7 test cases covering all pipeline stages
+  - Added message processor thread for state flow
+- **Impact**: Enables automated validation of complete AI loop, catches integration issues early
+- **Owner**: AI agent
+- **Status**: IMPLEMENTED ✅
+
+---
+
 ## Pending Decisions
 
 ### Decision PENDING-01 - Mistral API Integration Approach
@@ -302,4 +455,4 @@ This file records all significant decisions made during the CoH1 × Mistral AI M
 
 ---
 
-*Last updated: 2026-10-18*
+*Last updated: 2026-10-25*

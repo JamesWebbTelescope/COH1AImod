@@ -40,6 +40,7 @@ constant IPC_UPDATE_INTERVAL = 0.05
 include("scar/state_collector.scar")
 include("scar/serializer.scar")
 include("scar/ipc.scar")
+include("scar/command_executor.scar")
 include("scar/reflex_layer.scar")
 
 // ============================================
@@ -156,15 +157,25 @@ function UpdateReflexLayer(deltaTime)
 function ProcessAICommand(command)
 {
     -- This function handles commands from the Mistral AI
-    -- For Phase 0, this is just a placeholder
+    -- For Phase 2, this uses the command executor
     
     if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
         Log("Processing AI command: " .. (command.command or "unknown"))
     end
     
-    -- In Phase 3, this would execute the validated AI commands
-    -- For now, just log and pass to standard command processing
-    return ProcessCommand(command)
+    -- Execute command through command executor
+    return ExecuteCommand(command)
+}
+
+// ============================================
+// Direct Command Processing (for IPC)
+// ============================================
+
+function ProcessCommand(command)
+{
+    -- This function is called by IPC for direct command processing
+    -- It now delegates to the command executor
+    return ExecuteCommand(command)
 }
 
 // ============================================

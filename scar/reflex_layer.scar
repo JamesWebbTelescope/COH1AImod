@@ -25,6 +25,9 @@
 -- Include configuration
 include("scar/config.scar")
 
+-- Include command executor for consistent command execution
+include("scar/command_executor.scar")
+
 -- Reflex-specific configuration
 constant REXLEX_UPDATE_INTERVAL = 0.1  // Seconds between reflex checks
 constant ARTILLERY_RESPONSE_DISTANCE = 50.0  // Distance to respond to artillery
@@ -295,23 +298,36 @@ function ExecuteSquadRetreat(squad, reason)
     local retreatPos = FindRetreatPosition(squad, position)
     
     if (retreatPos == null) then
-        -- Fallback: retreat in place
+        -- Fallback: retreat in place using command executor
         Log(string.format("Reflex: Squad %d - %s, retreating in place (no safe position found)", 
             squadId, reason))
-        squad:Retreat()
-        lastRetreatPositions[squadId] = {position.x, position.y, position.z}
-        return true
+        
+        -- Use command executor for consistent execution and tracking
+        local success = Retreat(squadId)
+        
+        if (success) then
+            lastRetreatPositions[squadId] = {position.x, position.y, position.z}
+            return true
+        else
+            -- Fallback to direct call
+            squad:Retreat()
+            lastRetreatPositions[squadId] = {position.x, position.y, position.z}
+            return true
+        end
     end
     
-    -- Move to retreat position
+    -- Move to retreat position using command executor
     Log(string.format("Reflex: Squad %d - %s, retreating to (%.1f, %.1f, %.1f)", 
         squadId, reason, retreatPos.x, retreatPos.y, retreatPos.z))
     
-    squad:Move(retreatPos.x, retreatPos.y, retreatPos.z)
-    squad:Retreat()  -- Also issue retreat command for extra safety
+    -- Use AttackMove to get to safety, then Retreat for extra safety
+    local moveSuccess = AttackMove(squadId, retreatPos.x, retreatPos.y, retreatPos.z)
+    local retreatSuccess = Retreat(squadId)
     
     lastRetreatPositions[squadId] = {retreatPos.x, retreatPos.y, retreatPos.z}
-    return true
+    
+    -- Return true if at least one command succeeded
+    return moveSuccess or retreatSuccess
 }
 
 function FindRetreatPosition(squad, currentPos)
@@ -631,13 +647,14 @@ function MoveSquadAwayFromPosition(squad, avoidPos)
                 coverPos.x, coverPos.y, coverPos.z))
         end
         
-        squad:AttackMove(newPos.x, newPos.y, newPos.z)
+        -- Use command executor for consistent execution
+        AttackMove(squadId, newPos.x, newPos.y, newPos.z)
         return true
     end
     
-    -- Fallback: just retreat
+    -- Fallback: just retreat using command executor
     Log(string.format("Reflex: Squad %d could not find safe position, retreating", squadId))
-    squad:Retreat()
+    Retreat(squadId)
     return true
 }
 
@@ -1186,11 +1203,12 @@ function FillBuildQueue(building, queue, player, resources)
         return false
     end
     
-    -- Order production
+    -- Order production using command executor
+    local buildingId = building:GetId()
     Log(string.format("Reflex: Ordering production of %s at building %d", 
-        bestUnit.name, building:GetId()))
+        bestUnit.name, buildingId))
     
-    building:Produce(bestUnit.type)
+    Produce(buildingId, bestUnit.type)
     
     return true
 }
