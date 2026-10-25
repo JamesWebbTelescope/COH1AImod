@@ -841,6 +841,54 @@ COH1AImod/
 
 ---
 
+## Execution Checklist (Next 4-6 Weeks)
+
+### Milestone 1: End-to-End Loop Stabilization
+- [ ] Confirm the SCAR mod emits a valid state snapshot structure from a live or simulated CoH1 match.
+- [ ] Validate Python ingestion of the same state format without schema drift or partial-file reads.
+- [ ] Verify the orchestrator can process incoming state without crashing or dropping messages.
+- [ ] Build the reflex decision path in a testable form and confirm it produces a valid command payload.
+- [ ] Write the command back through the IPC channel and confirm the receiving side accepts it.
+- [ ] Acceptance Gate: a repeatable state → decision → command loop runs without manual intervention in test mode.
+
+### Milestone 2: Game-State Validation Against CoH1 Scenarios
+- [ ] Test opening-economy state collection and ensure resources, income, and timing are accurate.
+- [ ] Test combat state collection: squad health, posture, target assignment, under-fire conditions, and unit losses.
+- [ ] Test retreat and defensive state handling: low-health/fallback behaviors and unit grouping.
+- [ ] Test capture-point control and map pressure: ownership, progress, and strategic importance.
+- [ ] Test tech-tree and queue tracking: upgrade status, build readiness, and production bottlenecks.
+- [ ] Acceptance Gate: golden-state fixtures cover the main tactical and strategic edge cases.
+
+### Milestone 3: Command Safety and Validation
+- [ ] Define the allowed action set and reject unsupported commands early.
+- [ ] Validate command targets before execution: unit IDs, positions, map validity, and ownership.
+- [ ] Add cooldown, queue, and retry constraints so commands do not overwhelm the game loop.
+- [ ] Enforce safety filters for emergency behavior (retreat, regroup, production gating, etc.).
+- [ ] Acceptance Gate: only validated commands can be queued or emitted to the game.
+
+### Milestone 4: Reflex Layer Integration and Drift Control
+- [ ] Wire the reflex layer into the orchestrator with deterministic scheduling.
+- [ ] Measure tick cadence, command latency, and any missed or stale decisions.
+- [ ] Add fallback behavior for missing or stale state snapshots.
+- [ ] Confirm the system remains stable under repeated simulation runs.
+- [ ] Acceptance Gate: the reflex layer continues operating with consistent timing and no runaway queue growth.
+
+### Milestone 5: Mistral Strategist Readiness
+- [ ] Define the strategist input schema using the finalized game-state format.
+- [ ] Create a clean Mistral client contract with explicit request/response validation.
+- [ ] Support fallback to reflex-only mode when the API is unavailable or rate-limited.
+- [ ] Add logging and traceability for AI decisions to enable debugging after matches.
+- [ ] Acceptance Gate: strategist integration is isolated behind a validated safety boundary and cannot break the live loop.
+
+### Milestone 6: Evaluation and Benchmarking
+- [ ] Run scenario-based evaluations across economy, defense, offense, and map-control cases.
+- [ ] Record latency and reliability metrics for communication, processing, and command execution.
+- [ ] Score outcomes based on correctness, stability, tactical reasonableness, and safety.
+- [ ] Publish a concise comparison between reflex-only and strategist-assisted runs.
+- [ ] Acceptance Gate: the project has measurable evidence of improvement before scaling scope.
+
+---
+
 ## Next Steps
 
 1. **Immediate Priority**: Stabilize the end-to-end loop: SCAR state generation → Python ingestion → reflex decision → command validation → command write-back.
