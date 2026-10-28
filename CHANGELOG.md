@@ -144,6 +144,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `MEMORY.md` - Project action log recording all code changes and actions
   - `EXECUTION_SHEET.md` - Working execution checklist for phase validation with stop/go gates
 - **Binary Mod File** (`-modname`) - CoH1 mod binary file for deployment
+- **Test Documentation**
+  - `MASTER_TEST_PLAN.md` - Comprehensive master test plan with phase-by-phase test tracking (416+ tests for Phases 0-2)
+  - `TESTS_EXECUTION_LIST.md` - Actionable list of all executable tests with quick run commands
 
 ### Changed
 - **SCAR IPC System** (`scar/ipc.scar`) - Refactored to use command executor
@@ -206,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tests/unit/test_fallback.py`
   - `tests/unit/test_reflex_layer.py`
   - `tests/integration/test_reflex_integration.py`
+  - `tests/integration/test_phase2_fallback.py` - Added type ignore annotation for missing imports
 
 ### Fixed
 - **Placeholder Functions** - Replaced all placeholder data collection functions with real SCAR API calls

@@ -25,7 +25,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
 
-from orchestrator.fallback import (
+from orchestrator.fallback import (  # type: ignore[reportMissingImports]
     FallbackManager, FallbackMode, FallbackReason, FallbackStats, FallbackEvent,
     get_fallback_manager, reset_fallback_manager, create_fallback_manager,
     is_in_fallback, trigger_fallback, exit_fallback, FallbackContext
