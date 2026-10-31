@@ -1,0 +1,45 @@
+# Failing and Hanging Unit Tests
+# Generated: 2026-10-25
+# Total: 4 tests (2 hanging, 2 failing)
+
+## Hanging Tests (Deadlock)
+# These tests hang indefinitely due to deadlock in FallbackManager.get_current_mode_info()
+tests/unit/test_fallback.py::TestCurrentModeInfo::test_get_current_mode_info_normal
+tests/unit/test_fallback.py::TestCurrentModeInfo::test_get_current_mode_info_fallback
+
+## Failing Tests (Non-hanging)
+# These tests fail with errors but do not hang
+
+tests/unit/test_fallback.py::TestCustomAPIChecker::test_custom_api_checker_variations
+tests/unit/test_fallback.py::TestEdgeCases::test_none_reason_string
+
+## Suggested Fixes
+
+### Fix for Hanging Tests (Deadlock in FallbackManager.get_current_mode_info)
+
+**File**: `python/orchestrator/fallback.py`
+
+**Problem**: The `get_current_mode_info()` method acquires `self._lock` and then calls `self.is_in_fallback()` and `self.is_normal()`, which both call `self.mode`. The `mode` property tries to re-acquire `self._lock`, causing a deadlock since `threading.Lock` is not reentrant.
+
+**Solution**: Replace the method calls with direct checks on `self._mode` since the lock is already held:
+
+```python
+def get_current_mode_info(self) -> Dict[str, Any]:
+    """Get information about current mode."""
+    with self._lock:
+        info = {
+            "mode": self._mode.name,
+            "is_fallback": self._mode == FallbackMode.FALLBACK,  # Direct check instead of self.is_in_fallback()
+            "is_normal": self._mode == FallbackMode.NORMAL,      # Direct check instead of self.is_normal()
+        }
+        
+        if self._fallback_start_time:
+            info["fallback_duration"] = time.time() - self._fallback_start_time
+        
+        if self._last_api_failure_time:
+            info["time_since_last_failure"] = time.time() - self._last_api_failure_time
+        
+        info["api_failure_count"] = self._api_failure_count
+        
+        return info
+```

@@ -275,7 +275,7 @@ class OrchestratorService:
         # For now, in test mode, generate a sample strategic command
         if self.test_mode:
             from orchestrator.command_processor import create_build_command
-            cmd = create_build_command("barracks", [200, 200, 0])
+            cmd = create_build_command("barracks", position=[200, 200, 0])
             self.command_processor.add_command(cmd)
             self.logger.debug("Added test strategic build command")
         

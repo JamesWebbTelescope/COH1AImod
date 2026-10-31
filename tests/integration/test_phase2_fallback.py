@@ -23,13 +23,17 @@ from pathlib import Path
 
 # Add parent directory to Python path for imports
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
+sys.path.insert(0, str((Path(__file__).parent.parent.parent / "python").resolve()))
 
 from orchestrator.fallback import (  # type: ignore[reportMissingImports]
     FallbackManager, FallbackMode, FallbackReason, FallbackStats, FallbackEvent,
     get_fallback_manager, reset_fallback_manager, create_fallback_manager,
     is_in_fallback, trigger_fallback, exit_fallback, FallbackContext
 )
+from orchestrator.command_processor import (  # type: ignore[reportMissingImports]
+    CommandProcessor, create_retreat_command
+)
+from config import Configuration  # type: ignore[reportMissingImports]
 
 
 # =============================================================================
@@ -420,9 +424,6 @@ class TestFallbackIntegration:
     
     def test_fallback_with_command_processor(self):
         """Test that command processor can work with fallback mode."""
-        from config import Configuration
-        from orchestrator.command_processor import CommandProcessor
-        
         # Create fallback manager
         fallback_mgr = FallbackManager(
             api_check_interval=0.1,
@@ -447,7 +448,6 @@ class TestFallbackIntegration:
         fallback_mgr.trigger_fallback("API unavailable")
         
         # Command processor should still work
-        from orchestrator.command_processor import create_retreat_command
         cmd = create_retreat_command(1)
         assert processor.add_command(cmd)
         

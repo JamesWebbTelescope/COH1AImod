@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Posture validation (AGGRESSIVE, DEFENSIVE, RETREAT, HOLD)
     - Building and unit type validation
     - Statistics tracking tests
+- **Test Failure Documentation** (`tests/unit/fail.txt`) - Test failure report for Phase 2
+  - Documents 2 hanging tests (deadlock in FallbackManager.get_current_mode_info)
+  - Documents 2 failing tests (TestCustomAPIChecker, TestEdgeCases)
+  - Includes suggested fix for deadlock issue (use direct `_mode` checks instead of method calls)
 - **SCAR Reflex Layer** (`scar/reflex_layer.scar`) - Complete implementation of local heuristics
   - **Critical Retreat System**: CRITICAL priority (squads at <=15% health), HIGH priority (squads at <=30% health under fire)
   - **Artillery Response System**: Detects artillery projectiles, moves squads away, uses cover
@@ -154,6 +158,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Now delegates all command processing to `ExecuteCommand()` from command_executor.scar
   - Added PING/PONG handling for IPC health check
   - Version updated to 0.3.0
+- **Phase 2 Fallback Tests** (`tests/integration/test_phase2_fallback.py`) - Improved imports and path resolution
+  - Resolved relative paths using `.resolve()` for cross-platform compatibility
+  - Consolidated imports at top of file
 - **SCAR Main Module** (`scar/main.scar`) - Updated to include command executor
   - Added `include("scar/command_executor.scar")` for command execution
   - Added `InitializeCommandExecutor()` call in initialization
@@ -216,6 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JSON Serialization** - Added proper JSON handling with fallback for SCAR environments
 - **File I/O** - Implemented SCAR-compatible file operations for IPC
 - **Duplicate Code** - Removed duplicate command handlers from ipc.scar (now in command_executor.scar)
+- **Command Creation Bug** (`python/orchestrator/main.py`) - Fixed missing `position=` keyword argument in `create_build_command()` call for test mode
 
 ## v0.1.0 - 2026-10-04
 
