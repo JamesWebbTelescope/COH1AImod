@@ -219,6 +219,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tests/integration/test_phase2_fallback.py` - Added type ignore annotation for missing imports
 
 ### Fixed
+- **Fallback Mechanism Deadlock** (`python/orchestrator/fallback.py`) - Fixed potential deadlock in `get_current_mode_info` by using direct `_mode` checks instead of calling `is_in_fallback()` and `is_normal()` methods that acquire locks
+- **Null Reason Handling** (`python/orchestrator/fallback.py`) - Added null check in `_classify_fallback_reason` to prevent NPE when reason is None
+- **Test Reliability** (`tests/unit/test_fallback.py`) - Added `api_check_interval = 0.0` to `test_custom_api_checker_variations` to ensure deterministic test behavior
+- **Test Logic Fix** (`tests/unit/test_fallback.py`) - Fixed toggling checker logic from `% 2 == 0` to `% 2 == 1` to match expected test behavior
 - **Placeholder Functions** - Replaced all placeholder data collection functions with real SCAR API calls
 - **JSON Serialization** - Added proper JSON handling with fallback for SCAR environments
 - **File I/O** - Implemented SCAR-compatible file operations for IPC

@@ -465,6 +465,8 @@ class FallbackManager:
     
     def _classify_fallback_reason(self, reason: str) -> FallbackReason:
         """Classify fallback reason string into enum."""
+        if reason is None:
+            return FallbackReason.UNKNOWN
         reason_lower = reason.lower()
         
         if "timeout" in reason_lower:
@@ -561,8 +563,8 @@ class FallbackManager:
         with self._lock:
             info = {
                 "mode": self._mode.name,
-                "is_fallback": self.is_in_fallback(),
-                "is_normal": self.is_normal(),
+                "is_fallback": self._mode == FallbackMode.FALLBACK,  # Direct check instead of self.is_in_fallback()
+                "is_normal": self._mode == FallbackMode.NORMAL,      # Direct check instead of self.is_normal()
             }
             
             if self._fallback_start_time:

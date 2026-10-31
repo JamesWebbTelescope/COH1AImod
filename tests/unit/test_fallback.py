@@ -526,11 +526,14 @@ class TestCustomAPIChecker:
         
     def test_custom_api_checker_variations(self, fallback_manager):
         """Test various custom API checker behaviors."""
+        # Use a very short interval to ensure both calls go through
+        fallback_manager.api_check_interval = 0.0
+        
         # Checker that toggles
         call_count = [0]
         def toggling_checker():
             call_count[0] += 1
-            return call_count[0] % 2 == 0
+            return call_count[0] % 2 == 1
         
         fallback_manager.set_api_checker(toggling_checker)
         
