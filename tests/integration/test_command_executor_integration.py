@@ -105,7 +105,22 @@ class TestCommandProcessorIntegration:
         
         with tempfile.TemporaryDirectory() as tmpdir:
             config.set("ipc", "data_dir", tmpdir)
-            processor = CommandProcessor(config)
+            
+            # Initialize with proper game state for safety filter
+            game_state = {
+                "resources": {
+                    "manpower": {"current": 1000, "max": 1000},
+                    "fuel": {"current": 500, "max": 800},
+                    "munitions": {"current": 300, "max": 600}
+                },
+                "population": {"current": 10, "max": 50},
+                "squads": [
+                    {"id": 1, "type": "engineer", "position": [0, 0, 0]}
+                ],
+                "tech_tree": {"tier_1": True, "tier_2": False}
+            }
+            
+            processor = CommandProcessor(config, game_state=game_state)
             
             # Add commands to queue
             cmd1 = create_build_command(1, "barracks", [100, 200, 0])

@@ -55,3 +55,6 @@ scar/*.pyc
 # Temporary files
 *.tmp
 *.temp
+
+# Temporary packaging directory
+temp_package_fixed/

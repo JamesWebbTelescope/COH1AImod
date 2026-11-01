@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
+- **Fixed Packaging Script** (`fix_package.bat`) - Fixed mod packaging script that resolves issue with files being packaged inside temp_package/ subfolder
+  - Copies SCAR files directly to temp directory root
+  - Proper mod.ini creation with version 0.2.0
+  - Multiple packaging methods (7-Zip, PowerShell, tar fallback)
+  - Verification of archive contents after packaging
 - **Phase 2 Completion Documentation** (`docs/PHASE_2_COMPLETION.md`) - Comprehensive completion report for Phase 2: Reflex Layer
   - Executive summary with all acceptance criteria met (4/4)
   - Detailed statistics: 364+ unit tests, 22+ integration tests, 8/8 end-to-end tests passing
@@ -153,6 +158,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `TESTS_EXECUTION_LIST.md` - Actionable list of all executable tests with quick run commands
 
 ### Changed
+- **Test Integration Fix** (`tests/integration/test_command_executor_integration.py`) - Fixed CommandProcessor initialization by adding game_state parameter for safety filter
+  - Added comprehensive game_state initialization with resources, population, squads, and tech_tree
+  - Ensures safety filter has proper context for resource checking
+- **.gitignore** - Added temp_package_fixed/ directory exclusion to prevent temporary packaging artifacts from being committed
 - **SCAR IPC System** (`scar/ipc.scar`) - Refactored to use command executor
   - Removed duplicate command handlers (BUILD, CAPTURE, ATTACK_MOVE, SET_POSTURE, PRODUCE, RETREAT, STOP, HOLD)
   - Now delegates all command processing to `ExecuteCommand()` from command_executor.scar
