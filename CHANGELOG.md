@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Posture validation (AGGRESSIVE, DEFENSIVE, RETREAT, HOLD)
     - Building and unit type validation
     - Statistics tracking tests
+- **Local Directory Ignore** (`.gitignore`) - Added `/\.local` to prevent local configuration files from being committed
 - **Test Failure Documentation** (`tests/unit/fail.txt`) - Test failure report for Phase 2
   - Documents 2 hanging tests (deadlock in FallbackManager.get_current_mode_info)
   - Documents 2 failing tests (TestCustomAPIChecker, TestEdgeCases)
@@ -158,6 +159,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `TESTS_EXECUTION_LIST.md` - Actionable list of all executable tests with quick run commands
 
 ### Changed
+- **Project Version Update** (`README.md`) - Updated version from 0.1.0 to 0.2.0, updated last updated date, marked Phase 2 as COMPLETE
+  - Updated mod file references from 0.1.0 to 0.2.0
+  - Updated example log timestamps to current date
+- **Packaging Script** (`package_mod.bat`) - Added new SCAR files to packaging
+  - Added `command_executor.scar` and `reflex_layer.scar` to file copy list
+- **Configuration Logging** (`python/config.py`) - Improved error handling
+  - Changed `print` statement to `logger.warning` for file logging setup errors
+- **IPC Fallback Paths** (`python/ipc_fallback.py`) - Enhanced Windows compatibility
+  - Refactored path handling for SharedMemoryIPC to properly use temp directory on Windows
+  - Cleaned up conditional logic for cross-platform support
+- **Command Processor** (`python/orchestrator/command_processor.py`) - Fixed parameter extraction logic
+  - Changed from using `or` operator to explicit None checks to properly handle 0 values for engineer_id, squad_id, etc.
+  - Applied fix to all command types: BUILD, CAPTURE, ATTACK_MOVE, SET_POSTURE, PRODUCE, RETREAT, STOP, HOLD
+- **Command Creation** (`python/orchestrator/main.py`) - Fixed test mode command creation
+  - Added missing `engineer_id` parameter to `create_build_command()` call
+- **Schema Enhancements** (`python/schema.py`) - Added intent serialization support
+  - Added `to_dict()` methods for `TechIntent` and `ProduceIntent` classes
+  - Added `from_json()` method for `StrategicPlan`
+  - Implemented full intent parsing in `from_dict()` with proper type handling
+  - Fixed position serialization to handle both Position objects and raw data
 - **Test Integration Fix** (`tests/integration/test_command_executor_integration.py`) - Fixed CommandProcessor initialization by adding game_state parameter for safety filter
   - Added comprehensive game_state initialization with resources, population, squads, and tech_tree
   - Ensures safety filter has proper context for resource checking
@@ -228,15 +249,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tests/integration/test_phase2_fallback.py` - Added type ignore annotation for missing imports
 
 ### Fixed
+- **Command Creation Bug** (`python/orchestrator/main.py`) - Fixed missing `engineer_id` parameter in `create_build_command()` call for test mode
+- **Command Parameter Extraction** (`python/orchestrator/command_processor.py`) - Fixed parameter extraction to handle 0 values correctly by using explicit None checks instead of `or` operator for all command types (BUILD, CAPTURE, ATTACK_MOVE, SET_POSTURE, PRODUCE, RETREAT, STOP, HOLD)
 - **Fallback Mechanism Deadlock** (`python/orchestrator/fallback.py`) - Fixed potential deadlock in `get_current_mode_info` by using direct `_mode` checks instead of calling `is_in_fallback()` and `is_normal()` methods that acquire locks
 - **Null Reason Handling** (`python/orchestrator/fallback.py`) - Added null check in `_classify_fallback_reason` to prevent NPE when reason is None
+- **IPC Fallback Path Handling** (`python/ipc_fallback.py`) - Improved Windows temp directory path handling in SharedMemoryIPC
 - **Test Reliability** (`tests/unit/test_fallback.py`) - Added `api_check_interval = 0.0` to `test_custom_api_checker_variations` to ensure deterministic test behavior
 - **Test Logic Fix** (`tests/unit/test_fallback.py`) - Fixed toggling checker logic from `% 2 == 0` to `% 2 == 1` to match expected test behavior
 - **Placeholder Functions** - Replaced all placeholder data collection functions with real SCAR API calls
 - **JSON Serialization** - Added proper JSON handling with fallback for SCAR environments
 - **File I/O** - Implemented SCAR-compatible file operations for IPC
 - **Duplicate Code** - Removed duplicate command handlers from ipc.scar (now in command_executor.scar)
-- **Command Creation Bug** (`python/orchestrator/main.py`) - Fixed missing `position=` keyword argument in `create_build_command()` call for test mode
 
 ## v0.1.0 - 2026-10-04
 

@@ -10,13 +10,13 @@ A mod for Company of Heroes 1 (Relaunch Edition) that replaces the game's defaul
 |-------|--------|-------------|
 | Phase 0 | ✅ **COMPLETE** | Foundation - IPC Spike |
 | Phase 1 | ✅ **COMPLETE** | Read-only Intelligence |
-| Phase 2 | ⏳ Pending | Reflex Layer |
+| Phase 2 | ✅ **COMPLETE** | Reflex Layer |
 | Phase 3 | ⏳ Pending | Strategist (Mistral) |
 | Phase 4 | ⏳ Pending | Evaluation |
 | Phase 5 | ⏳ Pending | Polish |
 
-**Current Version**: 0.1.0  
-**Last Updated**: 2026-10-10  
+**Current Version**: 0.2.0   
+**Last Updated**: 2026-11-08   
 **Compatibility**: Company of Heroes 1 (Relaunch Edition / Legacy)
 
 ---
@@ -42,14 +42,14 @@ cd D:\SteamLibrary\steamapps\common\Company of Heroes Relaunch\Mods\COh1AIMod
 package_mod.bat
 ```
 
-This creates **`COh1AIMod_0.1.0.sga`** in the mod directory.
+This creates **`COh1AIMod_0.2.0.sga`** in the mod directory.
 
 ### Step 2: Install the Mod
 
 Copy the `.sga` file to your CoH1 mods directory:
 
 ```
-From: COh1AIMod\COh1AIMod_0.1.0.sga
+From: COh1AIMod\COh1AIMod_0.2.0.sga
 To:   D:\SteamLibrary\steamapps\common\Company of Heroes Relaunch\Mods\coh1_mistral_ai.sga
 ```
 
@@ -99,10 +99,10 @@ python python\main.py --help
 
 You should see output like:
 ```
-2026-10-10 14:14:56,197 - coh1ai - INFO - CoH1 AI Orchestrator v0.1.0 initialized
-2026-10-10 14:14:56,201 - coh1ai - INFO - Orchestrator service started successfully
-2026-10-10 14:14:56,201 - coh1ai - INFO - IPC state file: coh1ai_state.json
-2026-10-10 14:14:56,201 - coh1ai - INFO - Service running. Press Ctrl+C to stop.
+2026-11-08 14:14:56,197 - coh1ai - INFO - CoH1 AI Orchestrator v0.2.0 initialized
+2026-11-08 14:14:56,201 - coh1ai - INFO - Orchestrator service started successfully
+2026-11-08 14:14:56,201 - coh1ai - INFO - IPC state file: coh1ai_state.json
+2026-11-08 14:14:56,201 - coh1ai - INFO - Service running. Press Ctrl+C to stop.
 ```
 
 **Keep this window open** - the orchestrator must run while you play.
@@ -161,7 +161,7 @@ RelicCOH.exe -modname coh1_mistral_ai
    - ✅ Read the game state from the file
    - ✅ Log state to the CoH1 installation's `coh1ai_data/states.jsonl`
    - ✅ Run tick schedulers (strategic: 10s, fast: 0.5s)
-   - ✅ Prepare for AI decision making (Phase 2+)
+   - ✅ Execute commands via the Reflex Layer (Phase 2)
 
 ---
 
@@ -182,12 +182,17 @@ COh1AIMod/
 │   ├── TESTING_GUIDE.md        # Testing instructions
 │   ├── IPC_LATENCY_REPORT.md    # Phase 0.5 results
 │   ├── FALLBACK_IPC_DOCUMENTATION.md  # Phase 0.6 results
-│   └── PHASE_0_COMPLETION.md    # Phase 0 summary
+│   ├── PHASE_0_COMPLETION.md    # Phase 0 summary
+│   ├── PHASE_2_COMPLETION.md    # Phase 2 summary
+│   └── PHASE_2_TESTING_PLAN.md  # Phase 2 testing plan
 ├── scar/
 │   ├── config.scar             # SCAR configuration
 │   ├── main.scar               # Main SCAR entry point
 │   ├── ipc.scar                # IPC communication
-│   └── state_collector.scar    # Game state collection
+│   ├── state_collector.scar    # Game state collection
+│   ├── serializer.scar         # JSON serialization
+│   ├── command_executor.scar   # Command execution (Phase 2)
+│   └── reflex_layer.scar       # Reflex layer logic (Phase 2)
 ├── python/
 │   ├── config.py               # Python configuration
 │   ├── schema.py               # JSON schema definitions
@@ -195,16 +200,38 @@ COh1AIMod/
 │   ├── ipc_fallback.py         # Fallback IPC methods
 │   ├── logger.py               # State logging
 │   ├── scheduler.py            # Tick schedulers
-│   └── main.py                # Orchestrator entry point
+│   ├── safety_filter.py        # Safety validation
+│   ├── validator.py            # Command validation
+│   ├── main.py                 # Orchestrator entry point
+│   └── orchestrator/
+│       ├── __init__.py
+│       ├── main.py            # Orchestrator service
+│       ├── command_processor.py # Command processing
+│       ├── state_manager.py   # State management
+│       ├── scheduler.py       # Tick schedulers
+│       └── fallback.py        # Fallback mechanism
 └── tests/
-    ├── unit/                   # Unit tests (154 tests)
+    ├── unit/                   # Unit tests (395 tests)
     │   ├── test_config.py
     │   ├── test_ipc_reader.py
     │   ├── test_logger.py
     │   ├── test_scheduler.py
-    │   └── test_schema.py
-    ├── integration/             # Integration tests
-    └── performance/            # Performance tests
+    │   ├── test_schema.py
+    │   ├── test_validator.py
+    │   ├── test_safety_filter.py
+    │   ├── test_command_executor.py
+    │   ├── test_reflex_layer.py
+    │   └── test_orchestrator_main.py
+    ├── integration/             # Integration tests (137 tests)
+    │   ├── test_command_executor_integration.py
+    │   ├── test_end_to_end_loop.py
+    │   ├── test_end_to_end_simple.py
+    │   ├── test_phase2_fallback.py
+    │   ├── test_phase2_validation_safety.py
+    │   └── test_reflex_integration.py
+    ├── performance/            # Performance tests
+    │   └── test_ipc_latency.py
+    └── regression/              # Regression tests
 ```
 
 > **Note**: The `coh1ai_data/` directory is created automatically in the CoH1 installation directory when the orchestrator runs.
@@ -246,7 +273,7 @@ Keep `ipc.data_dir` set to `coh1ai_data` for SCAR/Python IPC. The runtime resolv
 ```json
 {
   "mod": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "name": "CoH1 Mistral AI Mod"
   },
   "ipc": {
@@ -334,6 +361,33 @@ Keep `ipc.data_dir` set to `coh1ai_data` for SCAR/Python IPC. The runtime resolv
    - Log rotation implemented (10MB max, 5 backups)
    - Logs can be parsed post-match for analysis
 
+### Phase 2: Reflex Layer (✅ COMPLETE)
+
+1. **Command Execution API**
+   - Complete implementation of all command types (BUILD, CAPTURE, ATTACK_MOVE, SET_POSTURE, PRODUCE, RETREAT, STOP, HOLD, PING)
+   - Statistics tracking (success/failure rates, execution times)
+   - Anti-spam protection with pending command queue
+   - Command spacing to prevent entity command flooding
+
+2. **Local Reflex Layer**
+   - All 4 autonomous heuristics implemented and tested
+   - Attack heuristic: Engages enemy squads in range
+   - Build heuristic: Constructs buildings from build queue
+   - Idle heuristic: Handles idle squad decisions
+   - Retreat heuristic: Falls back when under fire
+
+3. **Safety & Validation**
+   - Comprehensive validation of all inputs
+   - Safety filtering for all commands
+   - Validation of command structures, types, positions, and parameters
+
+4. **End-to-End Loop Validation**
+   - 8/8 end-to-end tests passing
+   - Complete state → decision → command pipeline validated
+   - Milestone 1: End-to-End Loop Stabilization achieved
+
+For complete Phase 2 details, see `docs/PHASE_2_COMPLETION.md`
+
 ---
 
 ## 🔍 How It Works
@@ -347,6 +401,7 @@ STEP 1: You run the Python orchestrator
 │  - IPC Reader: Watches for coh1ai_state.json                     │
 │  - State Logger: Logs to states.jsonl                             │
 │  - Schedulers: Strategic (10s) & Fast (0.5s) ticks                 │
+│  - Command Processor: Executes commands via Reflex Layer        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -357,6 +412,7 @@ STEP 2: You launch CoH1 with: RelicCOH.exe -modname coh1_mistral_ai
 │  - Collects game state every second                               │
 │  - Writes to <CoH1 install>\coh1ai_data\coh1ai_state.json        │
 │  - Reads from <CoH1 install>\coh1ai_data\coh1ai_commands.json    │
+│  - Executes commands via command_executor.scar                   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -364,7 +420,11 @@ STEP 2: You launch CoH1 with: RelicCOH.exe -modname coh1_mistral_ai
                               ▼
              Python reads and removes the snapshot
                               ▼
-             Append to <CoH1 install>\coh1ai_data\states.jsonl
+             Reflex Layer analyzes state and generates commands
+                              ▼
+             Commands written to coh1ai_commands.json
+                              ▼
+             SCAR reads and executes commands in-game
 ```
 
 ### File Watching
@@ -390,6 +450,9 @@ SCAR and Python use `coh1ai_data/` under the CoH1 installation directory:
 | `scar/main.scar` | Main entry point & update loop | ✅ Complete |
 | `scar/ipc.scar` | File-based IPC communication | ✅ Complete |
 | `scar/state_collector.scar` | Game state collection | ✅ Complete |
+| `scar/serializer.scar` | JSON serialization for state data | ✅ Complete |
+| `scar/command_executor.scar` | Command execution API (Phase 2) | ✅ Complete |
+| `scar/reflex_layer.scar` | Reflex layer decision making (Phase 2) | ✅ Complete |
 
 ### API Used
 
@@ -412,7 +475,7 @@ See `docs/SCAR_IMPLEMENTATION.md` for complete API reference.
 ### Run Unit Tests
 
 ```bash
-# Run all 154 unit tests
+# Run all 395 unit tests
 python -m pytest tests/unit/ -v
 
 # Run specific test modules
@@ -421,6 +484,23 @@ python -m pytest tests/unit/test_scheduler.py -v
 python -m pytest tests/unit/test_ipc_reader.py -v
 python -m pytest tests/unit/test_schema.py -v
 python -m pytest tests/unit/test_config.py -v
+python -m pytest tests/unit/test_validator.py -v
+python -m pytest tests/unit/test_safety_filter.py -v
+python -m pytest tests/unit/test_command_executor.py -v
+python -m pytest tests/unit/test_reflex_layer.py -v
+python -m pytest tests/unit/test_orchestrator_main.py -v
+```
+
+### Run Integration Tests
+
+```bash
+# Run all 137 integration tests
+python -m pytest tests/integration/ -v
+
+# Run specific integration test modules
+python -m pytest tests/integration/test_end_to_end_loop.py -v
+python -m pytest tests/integration/test_command_executor_integration.py -v
+python -m pytest tests/integration/test_reflex_integration.py -v
 ```
 
 ### Run Performance Tests
@@ -432,7 +512,9 @@ python tests/performance/test_ipc_latency.py
 
 ### Test Coverage
 
-- **154 unit tests** passing ✅
+- **395 unit tests** passing ✅
+- **137 integration tests** passing ✅
+- **Total: 532 tests** passing ✅
 - All new modules have comprehensive test coverage
 - Performance tests verify latency requirements (<200ms)
 
@@ -536,6 +618,8 @@ mkdir "<CoH1 installation directory>\coh1ai_data"
 | `docs/IPC_LATENCY_REPORT.md` | Phase 0.5 test results |
 | `docs/FALLBACK_IPC_DOCUMENTATION.md` | Phase 0.6 documentation |
 | `docs/PHASE_0_COMPLETION.md` | Phase 0 completion summary |
+| `docs/PHASE_2_COMPLETION.md` | Phase 2 completion summary |
+| `docs/PHASE_2_TESTING_PLAN.md` | Phase 2 testing plan |
 
 ---
 
@@ -544,7 +628,7 @@ mkdir "<CoH1 installation directory>\coh1ai_data"
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `python -m pytest tests/unit/ -v`
+4. Run tests: `python -m pytest tests/ -v`
 5. Submit a pull request
 
 ---
@@ -572,7 +656,7 @@ For issues or questions:
 
 ### 1. Rename your .sga file:
 ```
-Copy COh1AIMod_0.1.0.sga to coh1_mistral_ai.sga
+Copy COh1AIMod_0.2.0.sga to coh1_mistral_ai.sga
 ```
 
 ### 2. Start the orchestrator:
@@ -591,10 +675,12 @@ RelicCOH.exe -modname coh1_mistral_ai
 - SCAR mod loads in CoH1 and collects game state
 - Python orchestrator reads state and logs it
 - SCAR snapshots are written every second under `<CoH1 installation directory>\coh1ai_data\`; Python consumes them and appends to `states.jsonl`
-- Schedulers tick for future AI decisions
+- Reflex Layer analyzes state and generates commands
+- Commands are executed in-game via SCAR command executor
+- Schedulers tick for AI decision making
 
-**Phases Complete:** Phase 0 ✅ + Phase 1 ✅  
-**Ready for:** Phase 2 (Reflex Layer) development
+**Phases Complete:** Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅  
+**Ready for:** Phase 3 (Strategist) development
 
 ---
 
@@ -607,7 +693,7 @@ RelicCOH.exe -modname coh1_mistral_ai
 
 ---
 
-*Last updated: 2026-10-10*  
-*Version: 0.1.0*  
+*Last updated: 2026-11-08*  
+*Version: 0.2.0*  
 *Compatibility: CoH1 Relaunch Edition*  
 *Command: `RelicCOH.exe -modname coh1_mistral_ai`*

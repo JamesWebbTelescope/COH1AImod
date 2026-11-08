@@ -743,7 +743,7 @@ class BuildIntent(Intent):
         result = super().to_dict()
         result.update({
             "building_type": self.building_type,
-            "position": self.position.to_list() if self.position else None,
+            "position": self.position.to_list() if isinstance(self.position, Position) else self.position,
             "engineer_id": self.engineer_id
         })
         return result
@@ -758,6 +758,14 @@ class TechIntent(Intent):
     reasoning: str = ""
     priority: int = 1
     building_id: Optional[int] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        result = super().to_dict()
+        result.update({
+            "tech_name": self.tech_name,
+            "building_id": self.building_id
+        })
+        return result
 
 
 @dataclass
@@ -770,6 +778,15 @@ class ProduceIntent(Intent):
     priority: int = 1
     building_id: Optional[int] = None
     count: int = 1
+    
+    def to_dict(self) -> Dict[str, Any]:
+        result = super().to_dict()
+        result.update({
+            "unit_type": self.unit_type,
+            "building_id": self.building_id,
+            "count": self.count
+        })
+        return result
 
 
 @dataclass
@@ -798,12 +815,79 @@ class StrategicPlan:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
     
     @classmethod
+    def from_json(cls, json_str: str) -> "StrategicPlan":
+        """Create StrategicPlan from JSON string."""
+        try:
+            data = json.loads(json_str)
+            return cls.from_dict(data)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
+    
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StrategicPlan":
+        # Parse intentions from data
+        intentions = []
+        intentions_data = data.get("intentions", [])
+        
+        for intent_data in intentions_data:
+            intent_type = intent_data.get("intent", "")
+            # Manually construct intent objects since they don't have from_dict methods
+            if intent_type == IntentType.BUILD.value:
+                position_data = intent_data.get("position")
+                # Handle position as list, dict, or None
+                if position_data is not None:
+                    if isinstance(position_data, list):
+                        position = Position.from_list(position_data)
+                    else:
+                        position = Position.from_dict(position_data)
+                else:
+                    position = None
+                intent = BuildIntent(
+                    intent=intent_data.get("intent", ""),
+                    confidence=intent_data.get("confidence", 1.0),
+                    reasoning=intent_data.get("reasoning", ""),
+                    priority=intent_data.get("priority", 1),
+                    building_type=intent_data.get("building_type", ""),
+                    position=position,
+                    engineer_id=intent_data.get("engineer_id")
+                )
+                intentions.append(intent)
+            elif intent_type == IntentType.TECH.value:
+                intent = TechIntent(
+                    intent=intent_data.get("intent", ""),
+                    confidence=intent_data.get("confidence", 1.0),
+                    reasoning=intent_data.get("reasoning", ""),
+                    priority=intent_data.get("priority", 1),
+                    tech_name=intent_data.get("tech_name", ""),
+                    building_id=intent_data.get("building_id")
+                )
+                intentions.append(intent)
+            elif intent_type == IntentType.PRODUCE.value:
+                intent = ProduceIntent(
+                    intent=intent_data.get("intent", ""),
+                    confidence=intent_data.get("confidence", 1.0),
+                    reasoning=intent_data.get("reasoning", ""),
+                    priority=intent_data.get("priority", 1),
+                    unit_type=intent_data.get("unit_type", ""),
+                    building_id=intent_data.get("building_id"),
+                    count=intent_data.get("count", 1)
+                )
+                intentions.append(intent)
+            else:
+                # Default to base Intent for unknown types
+                intent = Intent(
+                    intent=intent_data.get("intent", ""),
+                    confidence=intent_data.get("confidence", 1.0),
+                    reasoning=intent_data.get("reasoning", ""),
+                    priority=intent_data.get("priority", 1)
+                )
+                intentions.append(intent)
+        
         return cls(
             version=data.get("version", "1.0"),
             timestamp=data.get("timestamp", 0.0),
             game_time=data.get("game_time", 0.0),
-            intentions=[],  # TODO: Implement intent parsing
+            intentions=intentions,
             reasoning=data.get("reasoning", ""),
             confidence=data.get("confidence", 1.0),
             next_decision_time=data.get("next_decision_time", 0.0)

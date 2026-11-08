@@ -335,7 +335,7 @@ class Configuration:
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
             except (IOError, OSError) as e:
-                print(f"Warning: Could not set up file logging: {e}")
+                logger.warning(f"Could not set up file logging: {e}")
         
         self._logger = logger
         return logger

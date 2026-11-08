@@ -32,6 +32,8 @@ copy scar\ipc.scar "%TEMP_DIR%\" >nul
 copy scar\main.scar "%TEMP_DIR%\" >nul
 copy scar\serializer.scar "%TEMP_DIR%\" >nul
 copy scar\state_collector.scar "%TEMP_DIR%\" >nul
+copy scar\command_executor.scar "%TEMP_DIR%\" >nul
+copy scar\reflex_layer.scar "%TEMP_DIR%\" >nul
 
 REM Create mod.ini file (optional)
 (

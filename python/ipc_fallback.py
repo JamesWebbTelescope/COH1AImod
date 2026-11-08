@@ -107,11 +107,13 @@ class SharedMemoryIPC:
         self.config = config or get_config()
         self.logger = logging.getLogger(f"{__name__}.SharedMemoryIPC")
         self.shm_name = shm_name
-        self.shm_path = Path(f"/dev/shm/{shm_name}") if os.name == 'posix' else Path(f"C:\\Temp\\{shm_name}.mem")
         
-        # On Windows, use a temp file
-        if os.name == 'nt':
-            import tempfile
+        # Use appropriate path for the OS
+        import tempfile
+        if os.name == 'posix':
+            self.shm_path = Path(f"/dev/shm/{shm_name}")
+        else:
+            # On Windows, use temp directory
             temp_dir = Path(tempfile.gettempdir())
             self.shm_path = temp_dir / f"{shm_name}.mem"
         

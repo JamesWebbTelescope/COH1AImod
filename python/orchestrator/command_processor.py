@@ -455,31 +455,93 @@ class CommandProcessor:
         }
         
         # Add parameters based on command type
+        # Use explicit None checks instead of 'or' operator to handle 0 values correctly
         if command.command_type == "BUILD":
-            cmd_dict["engineer_id"] = command.parameters.get("engineer_id", command.parameters.get("unit_id"))
-            cmd_dict["building_type"] = command.target.get("type") if command.target else command.parameters.get("building_type")
-            cmd_dict["position"] = command.target.get("position") if command.target else command.parameters.get("position")
+            # Get engineer_id - can be 0, so use explicit None check
+            engineer_id = command.parameters.get("engineer_id")
+            if engineer_id is None:
+                engineer_id = command.parameters.get("unit_id")
+            if engineer_id is None and command.target:
+                engineer_id = command.target.get("engineer_id")
+            cmd_dict["engineer_id"] = engineer_id
+            
+            # Get building_type
+            building_type = command.parameters.get("building_type")
+            if building_type is None and command.target:
+                building_type = command.target.get("type")
+            cmd_dict["building_type"] = building_type
+            
+            # Get position
+            position = command.parameters.get("position")
+            if position is None and command.target:
+                position = command.target.get("position")
+            cmd_dict["position"] = position
+            
         elif command.command_type == "CAPTURE":
-            # CAPTURE command can have unit_id in target or parameters
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
-            if cmd_dict["squad_id"] is None and command.target:
-                cmd_dict["squad_id"] = command.target.get("unit_id")
-            cmd_dict["point_id"] = command.target.get("point_id") if command.target else command.parameters.get("point_id")
+            # CAPTURE command can have unit_id/squad_id in target or parameters
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            if squad_id is None and command.target:
+                squad_id = command.target.get("unit_id")
+            cmd_dict["squad_id"] = squad_id
+            
+            point_id = command.parameters.get("point_id")
+            if point_id is None and command.target:
+                point_id = command.target.get("point_id")
+            cmd_dict["point_id"] = point_id
+            
         elif command.command_type == "ATTACK_MOVE":
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
-            cmd_dict["position"] = command.target.get("position") if command.target else command.parameters.get("position")
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            cmd_dict["squad_id"] = squad_id
+            
+            position = command.parameters.get("position")
+            if position is None and command.target:
+                position = command.target.get("position")
+            cmd_dict["position"] = position
+            
         elif command.command_type == "SET_POSTURE":
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
-            cmd_dict["posture"] = command.target.get("posture") if command.target else command.parameters.get("posture")
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            cmd_dict["squad_id"] = squad_id
+            
+            posture = command.parameters.get("posture")
+            if posture is None and command.target:
+                posture = command.target.get("posture")
+            cmd_dict["posture"] = posture
+            
         elif command.command_type == "PRODUCE":
-            cmd_dict["building_id"] = command.parameters.get("building_id") or (command.target.get("building_id") if command.target else None)
-            cmd_dict["unit_type"] = command.target.get("unit_type") if command.target else command.parameters.get("unit_type")
+            building_id = command.parameters.get("building_id")
+            if building_id is None and command.target:
+                building_id = command.target.get("building_id")
+            cmd_dict["building_id"] = building_id
+            
+            unit_type = command.parameters.get("unit_type")
+            if unit_type is None and command.target:
+                unit_type = command.target.get("unit_type")
+            cmd_dict["unit_type"] = unit_type
+            
         elif command.command_type == "RETREAT":
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            cmd_dict["squad_id"] = squad_id
+            
         elif command.command_type == "STOP":
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            cmd_dict["squad_id"] = squad_id
+            
         elif command.command_type == "HOLD":
-            cmd_dict["squad_id"] = command.parameters.get("unit_id", command.parameters.get("squad_id"))
+            squad_id = command.parameters.get("unit_id")
+            if squad_id is None:
+                squad_id = command.parameters.get("squad_id")
+            cmd_dict["squad_id"] = squad_id
+            
         elif command.command_type == "PING":
             cmd_dict["timestamp"] = command.timestamp
         elif command.command_type == "PONG":

@@ -58,3 +58,4 @@ scar/*.pyc
 
 # Temporary packaging directory
 temp_package_fixed/
+/.local
