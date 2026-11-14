@@ -1,458 +1,535 @@
-# DECISIONS.md - Project Decision Log
+# Design Decisions Documentation
 
-This file records all significant decisions made during the CoH1 × Mistral AI Mod project development.
+## Overview
 
-## Format
-- **Timestamp**: ISO 8601 format (YYYY-MM-DD HH:MM:SS)
-- **Decision**: Clear description of the decision
-- **Rationale**: Why this decision was made
-- **Context**: Background and constraints
-- **Impact**: Expected consequences
-- **Owner**: Who made the decision (AI agent or user)
-- **Status**: CONFIRMED or TENTATIVE
+This document records all major design decisions made during the development of the CoH1 × Mistral AI Mod project.
 
 ---
 
-## Phase 0: Foundation - IPC Spike
+## Decision Index
 
-### Decision 0.1 - Use File Polling IPC as Primary Method
-- **Timestamp**: 2026-10-04
-- **Decision**: Implement file-based IPC using JSON files for communication between SCAR and Python
-- **Rationale**: File I/O is universally supported across platforms and doesn't require special permissions or libraries
-- **Context**: SCAR modding framework in CoH1, need reliable cross-process communication
-- **Impact**: Simple to implement, works on all platforms, measurable latency (~1.6ms average)
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 0.2 - Implement Fallback IPC Methods
-- **Timestamp**: 2026-10-04
-- **Decision**: Prototype Shared Memory and Console-Log Relay IPC as fallbacks
-- **Rationale**: Ensure robustness if file polling fails in certain environments
-- **Context**: Different CoH1 installations may have different file permission constraints
-- **Impact**: Multiple communication options available, automatic fallback handling
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 0.3 - Use Real SCAR API from scardoc.coh.fi
-- **Timestamp**: 2026-10-04
-- **Decision**: Use official `ebx:` namespace API for game state collection
-- **Rationale**: Provides direct access to game data through documented interface
-- **Context**: Need reliable access to player resources, squads, capture points, enemies, tech tree, build queue
-- **Impact**: Complete game state collection possible, future-proof implementation
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 0.4 - Organize Python Code into Orchestrator Package
-- **Timestamp**: 2026-10-11
-- **Decision**: Restructure Python modules into `python/orchestrator/` package
-- **Rationale**: Better organization, cleaner imports, improved maintainability
-- **Context**: Growing codebase needs proper package structure
-- **Impact**: All orchestrator components (scheduler, state_manager, command_processor) in one package
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+| Decision ID | Date | Area | Summary | Status |
+|-------------|------|------|---------|--------|
+| [D-001](#d-001-data-structure-choice) | 2026-10-26 | History | Data structure choice for history entries | ✅ Final |
+| [D-002](#d-002-rolling-vs-full-history) | 2026-10-26 | History | Rolling vs full history storage | ✅ Final |
+| [D-003](#d-003-context-generation-strategy) | 2026-10-26 | History | Context generation strategy | ✅ Final |
+| [D-004](#d-004-persistence-format) | 2026-10-26 | History | Persistence format selection | ✅ Final |
+| [D-005](#d-005-thread-safety-approach) | 2026-10-26 | History | Thread safety approach | ✅ Final |
+| [D-006](#d-006-rate-limiting-granularity) | 2026-10-26 | Rate Limiter | Rate limiting granularity | ✅ Final |
+| [D-007](#d-007-budget-sharing) | 2026-10-26 | Rate Limiter | Budget sharing between call types | ✅ Final |
+| [D-008](#d-008-adaptive-rate-limiting) | 2026-10-26 | Rate Limiter | Adaptive rate limiting implementation | ✅ Final |
+| [D-009](#d-009-statistics-tracking) | 2026-10-26 | Rate Limiter | Statistics tracking granularity | ✅ Final |
+| [D-010](#d-010-integration-architecture) | 2026-10-26 | Architecture | Integration architecture for both features | ✅ Final |
 
 ---
 
-## Phase 1: Read-only Intelligence
+## History Manager Design Decisions
 
-### Decision 1.1 - Use JSON Lines Format for State Logging
-- **Timestamp**: 2026-10-10
-- **Decision**: Log game states using JSON Lines (.jsonl) format
-- **Rationale**: Easy to parse, append-only, good for time-series data
-- **Context**: Need efficient storage and retrieval of game state snapshots
-- **Impact**: Simple implementation, compatible with standard tools, efficient for post-match analysis
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+### D-001: Data Structure Choice
 
-### Decision 1.2 - Implement Log Rotation
-- **Timestamp**: 2026-10-10
-- **Decision**: Add automatic log rotation with configurable max size and backup count
-- **Rationale**: Prevent log files from growing too large during long matches
-- **Context**: Matches can last hours, generating many state snapshots
-- **Impact**: Configurable limits, automatic cleanup, prevents disk space issues
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Decision**: Use dataclasses for history entries and records
 
-### Decision 1.3 - Dual Scheduler Architecture
-- **Timestamp**: 2026-10-11
-- **Decision**: Implement separate Strategic (10s) and Fast (500ms) tick schedulers
-- **Rationale**: Different decision frequencies for macro (strategist) vs micro (reflex) decisions
-- **Context**: Need to handle both high-level strategy (less frequent) and immediate reactions (frequent)
-- **Impact**: Clean separation of concerns, each scheduler can be configured independently
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Rationale**:
+- Dataclasses provide automatic `__init__`, `__repr__`, and `__eq__` methods
+- Type hints are built-in with dataclasses
+- Immutable by default (frozen=True) for data integrity
+- Easy serialization/deserialization
+- Better performance than dict-based structures for attribute access
+
+**Alternatives Considered**:
+1. **Plain classes**: More verbose, manual implementation of common methods
+2. **Named tuples**: Immutable but less flexible, no default values
+3. **Dictionaries**: Less type-safe, harder to maintain
+4. **Pydantic models**: External dependency, overkill for simple data structures
+
+**Trade-offs**:
+- ✅ Clean, type-safe code
+- ✅ Good performance
+- ✅ Easy to maintain
+- ❌ Requires Python 3.7+ (already satisfied)
+
+**Impact**: All history data structures use dataclasses with frozen=True
 
 ---
 
-## Architecture Decisions
+### D-002: Rolling vs Full History Storage
 
-### Decision ARCH-01 - Two-Tier Architecture
-- **Timestamp**: 2026-10-04
-- **Decision**: Implement two-tier architecture with local reflex layer and Mistral strategist
-- **Rationale**: Handle latency and cost constraints: reflex layer handles urgent decisions without cloud calls, strategist handles macro-level planning
-- **Context**: Cloud API latency (~500-1000ms) too slow for immediate reactions, API costs require limiting calls
-- **Impact**: Responsive gameplay (reflexes react immediately), cost-effective (100-200 strategist calls per match)
-- **Owner**: AI agent (from development plan)
-- **Status**: CONFIRMED
+**Decision**: Implement rolling history with configurable max size
 
-### Decision ARCH-02 - JSON Schema for IPC
-- **Timestamp**: 2026-10-04
-- **Decision**: Use JSON with defined schemas for all data exchange
-- **Rationale**: Language-agnostic, human-readable, easy to validate
-- **Context**: Communication between SCAR (Lua-like) and Python
-- **Impact**: Type-safe data exchange, schema validation possible, easy debugging
-- **Owner**: AI agent (from development plan)
-- **Status**: CONFIRMED
+**Rationale**:
+- Memory efficiency: CoH1 matches can be long, unlimited history would consume too much memory
+- Performance: Rolling history has O(1) add operations with fixed-size storage
+- Strategist continuity: Recent history is more relevant than ancient history
+- Flexibility: Configurable size allows tuning based on available resources
 
-### Decision ARCH-03 - Command Queue with Priorities
-- **Timestamp**: 2026-10-11
-- **Decision**: Implement command queue with URGENT, HIGH, NORMAL, LOW priority levels
-- **Rationale**: Ensure critical commands (retreat, respond to artillery) execute immediately
-- **Context**: Multiple commands may be generated simultaneously with different urgency
-- **Impact**: Priority-based execution, prevents important commands from being delayed
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Alternatives Considered**:
+1. **Full history**: Store everything, provide pruning as separate operation
+2. **Time-based rolling**: Keep history from last N minutes/seconds
+3. **Priority-based**: Keep most "important" entries, drop less important ones
+
+**Trade-offs**:
+- ✅ Predictable memory usage
+- ✅ Fast operations
+- ✅ Recent context for strategist
+- ❌ Loses old data that might be useful for analysis
+- ❌ Requires tuning of max size parameter
+
+**Impact**:
+- `max_entries` parameter controls history size
+- Oldest entries are automatically pruned when limit is reached
+- Persistence includes all stored entries
 
 ---
 
-## Technical Decisions
+### D-003: Context Generation Strategy
 
-### Decision TECH-01 - Use Pydantic for JSON Validation
-- **Timestamp**: 2026-10-04
-- **Decision**: Use pydantic library for JSON schema validation (if available)
-- **Rationale**: Automatic validation, type coercion, clear error messages
-- **Context**: Need reliable validation of incoming game state and outgoing commands
-- **Impact**: Robust validation, fallback to manual validation if pydantic unavailable
-- **Owner**: AI agent (from development plan)
-- **Status**: TENTATIVE (not yet implemented, manual validation currently used)
+**Decision**: Generate context from most recent N entries plus summary statistics
 
-### Decision TECH-02 - Thread-Safe File Operations
-- **Timestamp**: 2026-10-10
-- **Decision**: Implement file locking for all IPC file operations
-- **Rationale**: Prevent race conditions when SCAR and Python access same files
-- **Context**: Concurrent file access possible in multi-threaded environment
-- **Impact**: Safe concurrent operations, uses platform-appropriate locking mechanisms
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Rationale**:
+- Most recent context is most relevant for current decisions
+- Summary statistics provide long-term trends without excessive data
+- Configurable context window allows tuning for different use cases
+- Balances detail with token efficiency (Mistral API has token limits)
 
----
+**Alternatives Considered**:
+1. **Full history in context**: Too many tokens, might exceed API limits
+2. **Sampling**: Random sampling might miss important patterns
+3. **Clustering**: Complex to implement, might not preserve important details
+4. **Feature extraction**: Only extract specific features, might lose nuance
 
-## Phase 2: Reflex Layer Decisions
+**Trade-offs**:
+- ✅ Balances recency and completeness
+- ✅ Token-efficient
+- ✅ Configurable for different needs
+- ❌ Might miss patterns that span beyond context window
+- ❌ Requires careful tuning of context window
 
-### Decision 2.1 - Implement All Reflex Behaviors in Single Module
-- **Timestamp**: 2026-10-18
-- **Decision**: Implement all four reflex behaviors (retreat, artillery response, capture micro, build queue) in single `scar/reflex_layer.scar` module
-- **Rationale**: Keeps reflex layer self-contained, easier to maintain and test, single update point
-- **Context**: Phase 2 requires local heuristics that never wait for cloud model calls
-- **Impact**: ~1200 lines in single module, but well-organized with clear sections for each behavior
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.2 - Priority-Based Reflex Processing
-- **Timestamp**: 2026-10-18
-- **Decision**: Process reflex behaviors in priority order: CRITICAL (retreat) -> HIGH (artillery) -> NORMAL (capture) -> LOW (build queue)
-- **Rationale**: Ensures most urgent actions (saving squads) happen first, less urgent can wait
-- **Context**: Multiple reflex conditions may be true simultaneously with limited processing time
-- **Impact**: Critical squad survival prioritized over less urgent actions
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.3 - Health-Based Retreat with Cooldown
-- **Timestamp**: 2026-10-18
-- **Decision**: Use two-tier health thresholds with cooldown: CRITICAL (<=15%) always retreats, LOW (<=30%) retreats only under fire/suppressed, with 5s cooldown
-- **Rationale**: Prevents spam of retreat commands, prioritizes squads that are actually in danger
-- **Context**: Need to save squads without constantly retrying retreat on same squad
-- **Impact**: More efficient resource usage, prevents command flood
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.4 - Smart Retreat Position Finding
-- **Timestamp**: 2026-10-18
-- **Decision**: Retreat position selection strategy: 1) Away from nearest enemy, 2) Away from current facing, 3) Towards base, with pathfinding validation
-- **Rationale**: Get squad to safety as quickly as possible using multiple fallback strategies
-- **Context**: Need reliable retreat positions that are actually reachable
-- **Impact**: Squads retreat to valid positions, not into obstacles or off-map
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.5 - Artillery Response with Cover Usage
-- **Timestamp**: 2026-10-18
-- **Decision**: Artillery response moves squads away from impact positions and uses cover when available
-- **Rationale**: Maximizes squad survival by both increasing distance and using terrain for protection
-- **Context**: Artillery is high-danger situation requiring immediate response
-- **Impact**: Squads have better survival rate against artillery fire
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.6 - Capture Point Scoring System
-- **Timestamp**: 2026-10-18
-- **Decision**: Use scoring system to select best squad for capture: distance (closer better), health (healthier better), type (infantry preferred), movement (already moving towards better)
-- **Rationale**: Optimal squad assignment for efficient capture point acquisition
-- **Context**: Multiple squads may be available, need to pick best one for each CP
-- **Impact**: Faster capture, more efficient use of resources
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.7 - Resource-Aware Build Queue Management
-- **Timestamp**: 2026-10-18
-- **Decision**: Build queue filling considers resources, population cap, tech level, and keeps reserve margins
-- **Rationale**: Prevents queuing units that can't be afforded, respects game constraints
-- **Context**: Need continuous production without wasting resources or hitting limits
-- **Impact**: Always productive when possible, respects game economy
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.8 - Comprehensive Action Validation
-- **Timestamp**: 2026-10-18
-- **Decision**: Implement multi-level validation: whitelist check -> required fields -> type validation -> position format -> custom validators
-- **Rationale**: Catch all invalid commands before they reach execution layer
-- **Context**: Prevents errors from malformed or malicious commands
-- **Impact**: Robust command processing, clear error messages
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.9 - Multi-Check Safety Filter
-- **Timestamp**: 2026-10-18
-- **Decision**: Implement four safety checks: resources (affordability), population (cap), pathfinding (valid path), legality (valid target)
-- **Rationale**: Prevents game-breaking commands from being executed
-- **Context**: Need to ensure all commands are safe before execution
-- **Impact**: Prevents resource waste, population overflow, invalid moves
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.10 - Automatic Fallback with Manual Override
-- **Timestamp**: 2026-10-18
-- **Decision**: Fallback triggers automatically on API failures (configurable threshold) but can also be triggered manually
-- **Rationale**: Graceful degradation when cloud service unavailable, but also allows testing/debugging
-- **Context**: Mistral API may be unavailable due to network issues, rate limits, or service downtime
-- **Impact**: AI continues functioning with reflex-only behavior when strategist unavailable
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.11 - Fallback Recovery with Minimum Duration
-- **Timestamp**: 2026-10-18
-- **Decision**: Fallback mode requires minimum duration (30s default) before attempting recovery to prevent flapping
-- **Rationale**: Prevents rapid mode switching when API is unstable, provides stability
-- **Context**: Network conditions may be transient, need time to stabilize
-- **Impact**: More stable behavior during network issues
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision 2.12 - Comprehensive Event Tracking
-- **Timestamp**: 2026-10-18
-- **Decision**: Track all fallback events (activation, recovery attempts, failures) with timestamps and reasons
-- **Rationale**: Provides debugging information and usage statistics
-- **Context**: Need to understand when and why fallback occurs for troubleshooting
-- **Impact**: Full audit trail of fallback behavior, useful for debugging and analytics
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Impact**:
+- `context_window` parameter controls number of recent entries in context
+- Context includes both raw data and summary statistics
+- Multiple context generation methods available
 
 ---
 
-## Recent Decisions (Current Session)
+### D-004: Persistence Format
 
-### Decision CURRENT-01 - Fix Logger Import Error
-- **Timestamp**: 2026-10-18
-- **Decision**: Fix GameState import issue in logger.py to allow tests to run
-- **Rationale**: Import error prevented all tests from running, blocking further development
-- **Context**: logger.py had circular/relative import issue with GameState from schema
-- **Impact**: All 158 tests now passing, development can proceed
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Decision**: Use JSON format for persistence
 
-### Decision CURRENT-02 - Follow TDD for Phase 2 Implementation
-- **Timestamp**: 2026-10-18
-- **Decision**: Implement Phase 2 features using Test-Driven Development: write tests first, then implementation
-- **Rationale**: Ensures high test coverage (>80%) and robust implementation from the start
-- **Context**: Phase 2 is complex with many edge cases, TDD helps catch issues early
-- **Impact**: 177+ new tests for Phase 2, all passing, >80% coverage for all modules
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Rationale**:
+- Human-readable for debugging
+- Standard library support (no external dependencies)
+- Good balance of size and readability
+- Easy to integrate with other tools
+- Schema validation available
 
-### Decision CURRENT-03 - Use Existing Codebase Patterns
-- **Timestamp**: 2026-10-18
-- **Decision**: Follow existing code patterns: enums for types, dataclasses for data, singletons for shared instances
-- **Rationale**: Maintains consistency across codebase, easier maintenance
-- **Context**: Existing modules use these patterns successfully
-- **Impact**: Cohesive codebase, familiar patterns for all developers
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Alternatives Considered**:
+1. **Pickle**: Binary format, not human-readable, security concerns
+2. **MessagePack**: Binary, more compact, but external dependency
+3. **SQLite**: Relational database, overkill for this use case
+4. **Custom binary**: Complex to implement, not maintainable
 
----
+**Trade-offs**:
+- ✅ Human-readable
+- ✅ No external dependencies
+- ✅ Standard library support
+- ❌ Larger file size than binary formats
+- ❌ Slower than binary formats for large datasets
 
-## Milestone 1: End-to-End Loop Stabilization Decisions
-
-### Decision M1-01 - Create Comprehensive End-to-End Loop Test
-- **Timestamp**: 2026-10-25
-- **Decision**: Create integrated test that validates complete state → decision → command pipeline
-- **Rationale**: Proves the core loop works before proceeding to Phase 3, addresses the gap identified in the status assessment
-- **Context**: Phase 2 implementation exists but end-to-end validation was missing, blocking Phase 3 work
-- **Impact**: Validates Milestone 1 acceptance gate, provides foundation for all future development
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision M1-02 - Use Mock SCAR Components for Testing
-- **Timestamp**: 2026-10-25
-- **Decision**: Create MockSCARStateGenerator and MockSCARCommandExecutor classes instead of requiring actual CoH1 environment
-- **Rationale**: Enables automated testing without game installation, faster iteration, reproducible results
-- **Context**: Actual CoH1 testing requires manual game setup and is slow for TDD
-- **Impact**: Full test automation possible, tests run in CI/CD, faster development cycle
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision M1-03 - Direct IPC Connection for Commands
-- **Timestamp**: 2026-10-25
-- **Decision**: Use IPCReader.send_commands() directly instead of CommandProcessor.queue_command() in tests
-- **Rationale**: Simplifies test implementation, CommandProcessor expects AICommand objects which would require additional conversion
-- **Context**: Testing the conceptual flow, not the CommandProcessor API specifically
-- **Impact**: Tests focus on end-to-end validation rather than API compliance
-- **Owner**: AI agent
-- **Status**: CONFIRMED
-
-### Decision M1-04 - Message Processor Thread for Integration
-- **Timestamp**: 2026-10-25
-- **Decision**: Add message processor thread to connect IPC reader to state manager in test
-- **Rationale**: Mimics the orchestrator's _process_messages() loop, ensures states flow properly
-- **Context**: IPC reader reads files into a queue, but state manager needs to be notified
-- **Impact**: Complete pipeline simulation, realistic test environment
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Impact**:
+- History persisted as JSON files
+- Compression available for large histories
+- Easy to inspect and debug
 
 ---
 
-## Phase 2: Reflex Layer Decisions
+### D-005: Thread Safety Approach
 
-### Decision 2.13 - Create Dedicated Command Executor Module
-- **Timestamp**: 2026-10-25
-- **Decision**: Extract command execution logic from ipc.scar into dedicated command_executor.scar module
-- **Rationale**: Better separation of concerns, allows reflex layer and other modules to use consistent command execution, enables better statistics tracking and error handling
-- **Context**: Phase 2 requires command execution API (Feature 3.1). Command handlers existed in ipc.scar but weren't modular or reusable
-- **Impact**: Command execution is now reusable across all SCAR modules, better architecture, improved testability
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Decision**: Use threading.Lock for synchronization with async support
 
-### Decision 2.14 - Integrate Reflex Layer with Command Executor
-- **Timestamp**: 2026-10-25
-- **Decision**: Update reflex_layer.scar to use command_executor.scar functions for command execution
-- **Rationale**: Demonstrates integration between reflex layer and command executor, provides consistent statistics tracking, maintains direct ebx: API calls for low-latency requirements
-- **Context**: Reflex layer needs to execute commands immediately without waiting for Python. Command executor provides this via direct ebx: calls with tracking
-- **Impact**: Better code organization, consistent error handling, statistics tracking for all reflex actions
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Rationale**:
+- CoH1 runs in single thread, but Python orchestrator might use threads
+- threading.Lock is standard library, no external dependencies
+- Works with both synchronous and async code (via asyncio.to_thread)
+- Simple and well-understood pattern
 
-### Decision 2.15 - Use Command Executor for Convenience Functions
-- **Timestamp**: 2026-10-25
-- **Decision**: Add convenience functions (Build, Capture, AttackMove, etc.) to command_executor.scar for direct use by other SCAR modules
-- **Rationale**: Makes it easier for other SCAR code to use the command executor without creating full command tables, maintains consistency
-- **Context**: Reflex layer and future SCAR modules can call these functions directly
-- **Impact**: Simpler API for common use cases, maintains full command table support for Python integration
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Alternatives Considered**:
+1. **No locking**: Risk of race conditions
+2. **RLock**: Reentrant locks, but more complex, not needed here
+3. **Semaphore**: Overkill for simple mutual exclusion
+4. **asyncio.Lock**: Would require all code to be async
 
-### Decision 2.16 - Track Command Statistics
-- **Timestamp**: 2026-10-25
-- **Decision**: Implement comprehensive statistics tracking in command_executor.scar (execution times, success/failure rates, command counts)
-- **Rationale**: Provides visibility into command execution performance, helps debug issues, enables monitoring
-- **Context**: Need to understand command execution behavior in production
-- **Impact**: Full observability into command execution, helps identify performance bottlenecks
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Trade-offs**:
+- ✅ Simple and reliable
+- ✅ Works with both sync and async code
+- ✅ Standard library, no external dependencies
+- ❌ Small performance overhead
+- ❌ Need to be careful with deadlocks
 
-### Decision 2.17 - Prevent Command Spamming
-- **Timestamp**: 2026-10-25
-- **Decision**: Implement pending command tracking to prevent spamming entities with duplicate commands
-- **Rationale**: Prevents command queue overflow, reduces redundant commands, improves performance
-- **Context**: Rapid reflex decisions could generate many commands for the same entity
-- **Impact**: More efficient command processing, prevents entity command queues from filling up
-- **Owner**: AI agent
-- **Status**: CONFIRMED
+**Impact**:
+- All public methods are thread-safe
+- Internal state protected by locks
+- Async support via async wrapper methods
 
 ---
 
-## Phase 2 Decisions
+## Rate Limiter Design Decisions
 
-### Decision P2-01 - Validation Pipeline Integration Strategy
-- **Timestamp**: 2026-10-25 20:00
-- **Decision**: Integrate validator.py and safety_filter.py directly into command_processor.py
-- **Rationale**: Centralizes validation logic in one place, ensures all commands are validated before execution, maintains separation of concerns while providing unified interface
-- **Context**: Phase 2 requires safety and validation in place before command execution
-- **Implementation**: 
-  - Modified CommandProcessor.__init__() to accept validator and safety_filter instances
-  - Enhanced _validate_command() to use both validator and safety_filter
-  - Added _command_to_dict() to convert AICommand to dict for validation
-  - Added update_game_state() to provide current state to safety filter
-  - Integrated in orchestrator/main.py to pass components to command_processor
-- **Impact**: All commands now pass through validation and safety checks, preventing invalid or unsafe commands from being executed
-- **Owner**: AI agent
-- **Status**: IMPLEMENTED ✅
+### D-006: Rate Limiting Granularity
 
-### Decision P2-02 - Fallback Deadlock Resolution
-- **Timestamp**: 2026-10-25 20:30
-- **Decision**: Restructure check_api_status() to release lock before calling trigger_fallback()
-- **Rationale**: trigger_fallback() acquires the lock, but was being called from within check_api_status() which already holds the lock, causing deadlock
-- **Context**: Automatic fallback triggering in check_api_status() when API failure threshold is reached
-- **Implementation**: 
-  - Changed check_api_status() to use a return_value variable instead of multiple return statements
-  - Moved the actual trigger_fallback() call outside the lock context
-  - Ensured should_trigger_fallback flag is set inside lock, action taken outside lock
-- **Impact**: Prevents deadlock when automatic fallback is triggered, allows concurrent operations
-- **Owner**: AI agent
-- **Status**: IMPLEMENTED ✅
+**Decision**: Implement multi-level rate limiting (per-call, per-second, per-minute, per-match)
 
-### Decision P2-03 - Command Factory Functions
-- **Timestamp**: 2026-10-25 20:00
-- **Decision**: Create factory functions for all command types in command_processor.py
-- **Rationale**: Provides consistent, type-safe way to create AICommand instances, reduces boilerplate, ensures proper parameter structure
-- **Context**: Need to generate commands from various parts of the system (reflex layer, strategist, tests)
-- **Implementation**: Added create_* functions for all command types:
-  - create_build_command()
-  - create_capture_command()
-  - create_attack_move_command()
-  - create_produce_command()
-  - create_retreat_command()
-  - create_set_posture_command()
-  - create_stop_command()
-  - create_hold_command()
-- **Impact**: Standardized command creation across the codebase, easier to use and test
-- **Owner**: AI agent
-- **Status**: IMPLEMENTED ✅
+**Rationale**:
+- Per-match budget: Prevents exceeding Mistral API limits per match
+- Per-second limit: Prevents overwhelming the game with rapid calls
+- Per-minute limit: Prevents exceeding Mistral rate limits
+- Per-call minimum interval: Ensures minimum time between calls
 
-### Decision P2-04 - End-to-End Loop Validation Strategy
-- **Timestamp**: 2026-10-25 18:00
-- **Decision**: Create comprehensive end-to-end test with mock SCAR components
-- **Rationale**: Need to validate complete pipeline without requiring actual CoH1 game, enables automated testing and CI/CD
-- **Context**: Milestone 1 acceptance gate requires repeatable state → decision → command loop
-- **Implementation**:
-  - Created MockSCARStateGenerator with realistic game state progression
-  - Created MockSCARCommandExecutor to simulate command execution
-  - Implemented 7 test cases covering all pipeline stages
-  - Added message processor thread for state flow
-- **Impact**: Enables automated validation of complete AI loop, catches integration issues early
-- **Owner**: AI agent
-- **Status**: IMPLEMENTED ✅
+**Alternatives Considered**:
+1. **Single-level limiting**: Too restrictive or not restrictive enough
+2. **Token bucket algorithm**: Complex, hard to tune, overkill for this use case
+3. **Leaky bucket algorithm**: Similar issues to token bucket
+4. **Fixed window**: Might allow bursts at window boundaries
+
+**Trade-offs**:
+- ✅ Flexible and configurable
+- ✅ Prevents multiple types of abuse
+- ✅ Easy to understand and tune
+- ❌ More complex implementation
+- ❌ Multiple parameters to configure
+
+**Impact**:
+- Configurable limits at multiple levels
+- All checks are performed before allowing a call
+- Comprehensive protection against rate limit issues
 
 ---
 
-## Pending Decisions
+### D-007: Budget Sharing
 
-### Decision PENDING-01 - Mistral API Integration Approach
-- **Timestamp**: TBD
-- **Decision**: How to integrate Mistral API (direct API calls vs local proxy)
-- **Rationale**: Need to balance latency, cost, and reliability
-- **Context**: Phase 3 requires Mistral integration for strategist
-- **Impact**: Affects architecture, cost management, error handling
-- **Owner**: TBD
-- **Status**: TENTATIVE
+**Decision**: Make budget sharing configurable (default: urgent calls share budget)
 
-### Decision PENDING-02 - AI-vs-AI Test Harness Implementation
-- **Timestamp**: TBD
-- **Decision**: How to implement automated testing (headless CoH1 vs manual testing)
-- **Rationale**: Need reproducible test environment
-- **Context**: Phase 4 requires AI-vs-AI testing for evaluation
-- **Impact**: Affects testing strategy and infrastructure requirements
-- **Owner**: TBD
-- **Status**: TENTATIVE
+**Rationale**:
+- Mistral API has a global limit, not per-type limits
+- Urgent calls are still API calls, should count toward limit
+- Configurable for flexibility in different scenarios
+- Default behavior matches Mistral API reality
+
+**Alternatives Considered**:
+1. **Always share budget**: Less flexible, might not suit all use cases
+2. **Never share budget**: Could exceed API limits if both types used heavily
+3. **Separate budgets**: Would require separate Mistral accounts/API keys
+
+**Trade-offs**:
+- ✅ Flexible configuration
+- ✅ Default behavior prevents API limit issues
+- ✅ Matches Mistral API reality
+- ❌ Configurable complexity
+- ❌ Need to understand implications
+
+**Impact**:
+- `urgent_calls_share_budget` configuration parameter
+- Default is True (urgent calls count toward main budget)
+- Can be set to False for separate tracking
 
 ---
 
-*Last updated: 2026-10-25*
+### D-008: Adaptive Rate Limiting
+
+**Decision**: Implement adaptive rate limiting with cooldown factor
+
+**Rationale**:
+- Mistral API might rate limit unexpectedly
+- Need to back off when rate limited
+- Should gradually resume when rate limit clears
+- Cooldown factor provides exponential backoff
+
+**Alternatives Considered**:
+1. **Fixed backoff**: Too rigid, doesn't adapt to changing conditions
+2. **No backoff**: Would immediately retry and likely hit rate limit again
+3. **Random backoff**: Unpredictable, might not be optimal
+4. **Exponential backoff**: Standard approach, but we implemented a simpler version
+
+**Trade-offs**:
+- ✅ Adapts to changing conditions
+- ✅ Prevents repeated rate limit hits
+- ✅ Simple implementation
+- ❌ Might wait longer than necessary
+- ❌ More complex than fixed backoff
+
+**Impact**:
+- Rate limiter tracks rate limit status
+- Cooldown period applied when rate limited
+- Cooldown factor controls backoff speed
+- Clear rate limit method to reset
+
+---
+
+### D-009: Statistics Tracking
+
+**Decision**: Track comprehensive statistics for monitoring and debugging
+
+**Rationale**:
+- Need to monitor API usage for cost control
+- Debugging requires detailed information
+- Performance analysis benefits from comprehensive data
+- Lightweight enough to always collect
+
+**Alternatives Considered**:
+1. **Minimal tracking**: Only count calls, not detailed stats
+2. **No tracking**: Save memory, but lose valuable information
+3. **External monitoring**: Separate monitoring system, overkill for this use case
+4. ** Sampling**: Only track some calls, might miss important patterns
+
+**Trade-offs**:
+- ✅ Comprehensive debugging information
+- ✅ Performance analysis capability
+- ✅ Cost monitoring
+- ❌ Slightly more memory usage
+- ❌ Small performance overhead
+
+**Impact**:
+- Detailed call records with timestamps, tokens, latency, etc.
+- Aggregated statistics (total calls, total tokens, success rate, etc.)
+- Call history with search and filtering capabilities
+- All statistics available via API
+
+---
+
+## Integration Design Decisions
+
+### D-010: Integration Architecture
+
+**Decision**: Loose coupling with explicit integration points
+
+**Rationale**:
+- History manager and rate limiter are independent modules
+- Orchestrator integrates both via explicit method calls
+- Clear interfaces between components
+- Easy to test components independently
+- Flexible for future changes
+
+**Alternatives Considered**:
+1. **Tight coupling**: History manager and rate limiter directly reference each other
+2. **Event bus**: Components communicate via events, more complex
+3. **Dependency injection**: Framework-level complexity, overkill for this use case
+4. **Singleton pattern**: Global state, harder to test and maintain
+
+**Trade-offs**:
+- ✅ Clear separation of concerns
+- ✅ Easy to test
+- ✅ Flexible for changes
+- ✅ Easy to understand
+- ❌ Slightly more boilerplate code
+- ❌ Need to manually wire components together
+
+**Impact**:
+- Orchestrator creates and manages both components
+- Explicit method calls for integration
+- No direct dependencies between history manager and rate limiter
+- Easy to mock components for testing
+
+---
+
+## Configuration Design Decisions
+
+### D-011: Configuration Format
+
+**Decision**: Use configuration objects with defaults and validation
+
+**Rationale**:
+- Type-safe configuration
+- Default values for all parameters
+- Validation of configuration values
+- Easy to create from different sources (dict, file, etc.)
+
+**Alternatives Considered**:
+1. **Plain dictionaries**: Less type-safe, no validation
+2. **JSON files**: Good, but requires file I/O
+3. **Environment variables**: Hard to manage many parameters
+4. **Command line arguments**: Not suitable for many parameters
+
+**Trade-offs**:
+- ✅ Type-safe
+- ✅ Default values
+- ✅ Validation
+- ✅ Flexible creation
+- ❌ Slightly more code
+
+**Impact**:
+- `HistoryConfig` and `RateLimitConfig` classes
+- Default values for all parameters
+- Validation of configuration values
+- Can be created from dict, config object, or file
+
+---
+
+## Testing Design Decisions
+
+### D-012: Testing Strategy
+
+**Decision**: Comprehensive unit and integration testing
+
+**Rationale**:
+- Unit tests for individual components
+- Integration tests for component interactions
+- High code coverage (>80%)
+- Tests for edge cases and error conditions
+
+**Alternatives Considered**:
+1. **Only unit tests**: Might miss integration issues
+2. **Only integration tests**: Harder to isolate issues
+3. **Manual testing**: Not reproducible, hard to maintain
+4. **No testing**: Unacceptable for production code
+
+**Trade-offs**:
+- ✅ High confidence in code quality
+- ✅ Reproducible tests
+- ✅ Easy to maintain
+- ❌ More development time
+- ❌ Need to keep tests up to date
+
+**Impact**:
+- Unit tests for all public methods
+- Integration tests for component interactions
+- Edge case and error condition tests
+- Test coverage >80%
+
+---
+
+## Documentation Design Decisions
+
+### D-013: Documentation Approach
+
+**Decision**: Comprehensive inline documentation + separate docs
+
+**Rationale**:
+- Inline documentation (docstrings) for API reference
+- Separate files for architectural and design documentation
+- Examples in both inline and separate docs
+- Easy to maintain and keep up to date
+
+**Alternatives Considered**:
+1. **Only inline docs**: Hard to see big picture
+2. **Only separate docs**: Might get out of sync with code
+3. **No docs**: Unacceptable for maintainability
+4. **External docs**: Overkill for this project
+
+**Trade-offs**:
+- ✅ Comprehensive documentation
+- ✅ Easy to maintain
+- ✅ API reference built into code
+- ❌ More work to maintain
+- ❌ Need to keep docs up to date
+
+**Impact**:
+- All public methods have docstrings
+- Separate MEMORY.md, DECISIONS.md, TODO.md files
+- Examples in docstrings
+- Architecture documentation in separate files
+
+---
+
+## Recent Decisions (Features 4.3 and 4.4)
+
+### History Manager (Feature 4.3)
+
+**Key Decisions**:
+1. ✅ Use dataclasses for all data structures (D-001)
+2. ✅ Implement rolling history with configurable size (D-002)
+3. ✅ Generate context from recent entries + summary (D-003)
+4. ✅ Use JSON for persistence (D-004)
+5. ✅ Use threading.Lock for thread safety (D-005)
+
+**Implementation Status**: COMPLETE
+
+### Cost/Rate Limiter (Feature 4.4)
+
+**Key Decisions**:
+1. ✅ Multi-level rate limiting (D-006)
+2. ✅ Configurable budget sharing (D-007)
+3. ✅ Adaptive rate limiting with cooldown (D-008)
+4. ✅ Comprehensive statistics tracking (D-009)
+5. ✅ Loose coupling with orchestrator (D-010)
+
+**Implementation Status**: COMPLETE
+
+---
+
+## Decision Making Process
+
+### Criteria
+
+1. **Maintainability**: Can the decision be easily maintained and updated?
+2. **Performance**: Does the decision meet performance requirements?
+3. **Flexibility**: Can the decision accommodate future changes?
+4. **Complexity**: Is the complexity of the decision justified by its benefits?
+5. **Dependencies**: Does the decision introduce unacceptable dependencies?
+6. **Compatibility**: Is the decision compatible with existing code and requirements?
+
+### Process
+
+1. **Identify the problem**: Clearly define what needs to be decided
+2. **Gather requirements**: List all requirements the decision must satisfy
+3. **Identify alternatives**: List all reasonable alternatives
+4. **Evaluate alternatives**: Score each alternative against criteria
+5. **Consider trade-offs**: Identify pros and cons of each alternative
+6. **Make decision**: Choose the best alternative
+7. **Document**: Record the decision in DECISIONS.md
+8. **Review**: Have the decision reviewed if possible
+9. **Implement**: Implement the decision
+10. **Verify**: Verify the decision meets all requirements
+
+---
+
+## Decision Change Process
+
+### When to Change a Decision
+
+A decision should be reconsidered if:
+- New information becomes available
+- Requirements change
+- The decision is not working as expected
+- Better alternatives become available
+- The decision is too complex or expensive to maintain
+
+### Change Process
+
+1. **Identify the issue**: Clearly define why the decision needs to change
+2. **Document the change**: Record the reason for the change
+3. **Evaluate impact**: Assess the impact of the change
+4. **Update documentation**: Update DECISIONS.md with the change
+5. **Update code**: Make the necessary code changes
+6. **Test**: Verify the change doesn't break anything
+7. **Communicate**: Notify stakeholders of the change
+
+---
+
+## Decision Status Codes
+
+| Code | Meaning | Description |
+|------|---------|-------------|
+| ✅ Final | Finalized | Decision has been made and implemented |
+| 🔄 Pending | In Progress | Decision is being considered |
+| ⏳ Draft | Draft | Decision is being documented |
+| ❌ Deprecated | Deprecated | Decision has been superseded |
+| 🎯 Proposed | Proposed | Decision has been proposed but not finalized |
+
+---
+
+## Version History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0.0 | 2026-10-26 | Developer skill | Initial version with decisions for Features 4.3 and 4.4 |
+
+---
+
+## References
+
+- [PROTOTYPE_DEVELOPMENT_PLAN.md](PROTOTYPE_DEVELOPMENT_PLAN.md) - Project plan
+- [MEMORY.md](MEMORY.md) - Current state and memory
+- [TODO.md](TODO.md) - Task tracking
+
+---
+
+*Generated by developer skill - Design Decisions Documentation*

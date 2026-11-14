@@ -157,8 +157,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Documentation**
   - `MASTER_TEST_PLAN.md` - Comprehensive master test plan with phase-by-phase test tracking (416+ tests for Phases 0-2)
   - `TESTS_EXECUTION_LIST.md` - Actionable list of all executable tests with quick run commands
+- **Game History Manager** (`python/history.py`) - Complete history management for strategist continuity
+  - Rolling log of game state snapshots with configurable depth (default: 20 entries)
+  - Persistent storage to disk with JSON Lines format
+  - Thread-safe operations using deque with maxlen and threading.Lock
+  - Context generation for strategist prompts (resources, squads, capture points, tech)
+  - History entry types: GAME_STATE, DECISION, COMMAND, EVENT
+  - State compression for efficient storage
+  - Convenience functions for adding states, decisions, commands to default manager
+- **Cost/Rate Limiter** (`python/rate_limiter.py`) - Budget management for API calls
+  - Configurable per-second and per-minute rate limiting
+  - Budget system with configurable limits and reset policies (NEVER, PER_MATCH, PER_MINUTE, PER_HOUR, DAILY)
+  - Token-based rate limiting with bucket system
+  - Adaptive rate limiting based on call success rates
+  - Call type classification: STRATEGIC, URGENT, TEST
+  - URGENT calls bypass normal rate limiting but respect budget
+  - Comprehensive statistics tracking (calls allowed/denied, tokens used/available)
+  - Token reflection on call failures with configurable multiplier
+  - Thread-safe operations with separate locks for different sections
+- **New Test Files**
+  - `tests/unit/test_history.py` - Unit tests for Game History Manager
+  - `tests/unit/test_rate_limiter.py` - Unit tests for Cost/Rate Limiter
+  - `tests/integration/test_history_integration.py` - Integration tests for history module
+  - `tests/integration/test_rate_limiter_integration.py` - Integration tests for rate limiter module
+- **Task Tracking Documentation** (`TODO.md`) - Complete task tracking document
+  - Current priorities with status tracking
+  - Feature 4.3: Game History Manager (COMPLETED)
+  - Feature 4.4: Cost/Rate Limiter (COMPLETED)
+  - Test verification status
+  - Documentation update status
 
 ### Changed
+- **Design Decisions Documentation** (`DECISIONS.md`) - Complete restructuring to new format
+  - Restructured from action log format to clean design decisions documentation
+  - Added decision index table with 10 design decisions for History and Rate Limiter features
+  - Organized by date and area with status tracking
+  - Decisions D-001 to D-010 covering history data structures, storage, context generation, persistence, thread safety, and rate limiting implementation details
+- **Memory and Context Documentation** (`MEMORY.md`) - Restructured to simplified format
+  - Restructured from detailed action-by-action log to high-level memory and context documentation
+  - Streamlined from ~975 lines to ~440 lines while preserving key information
+  - Better organization for ongoing reference
 - **Project Version Update** (`README.md`) - Updated version from 0.1.0 to 0.2.0, updated last updated date, marked Phase 2 as COMPLETE
   - Updated mod file references from 0.1.0 to 0.2.0
   - Updated example log timestamps to current date
