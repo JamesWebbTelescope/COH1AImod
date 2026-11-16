@@ -352,6 +352,13 @@ class GameHistoryManager:
             except:
                 state_dict = {"error": "Failed to serialize state"}
         
+        # Override game_time in the state dict if provided
+        if SCHEMA_AVAILABLE and isinstance(state_dict, dict):
+            if "game_time" in state_dict:
+                state_dict["game_time"] = game_time
+            elif "time" in state_dict:
+                state_dict["time"] = game_time
+        
         entry = HistoryEntry(
             timestamp=time.time(),
             game_time=game_time,
@@ -656,7 +663,12 @@ class GameHistoryManager:
             "recent_states": [],
             "recent_decisions": [],
             "recent_commands": [],
-            "summary": {}
+            "summary": {
+                "total_states": 0,
+                "total_decisions": 0,
+                "total_commands": 0,
+                "total_events": 0
+            }
         }
         
         # Extract recent states
@@ -704,8 +716,8 @@ class GameHistoryManager:
             })
         
         # Generate summary
-        if include_summary and len(recent_states) > 0:
-            context["summary"] = self._generate_summary(entries)
+        if include_summary:
+            context["summary"].update(self._generate_summary(entries))
         
         return context
     

@@ -45,7 +45,22 @@ def history_config_with_persistence(temp_dir):
         max_file_entries=20,
         persistence_enabled=True,
         storage_dir=temp_dir,
-        history_file="test_history.jsonl"
+        history_file="test_history.jsonl",
+        compress_states=False  # Disable compression for tests
+    )
+
+
+@pytest.fixture
+def history_config_with_compression(temp_dir):
+    """Create a history config with compression enabled."""
+    from history import HistoryConfig
+    return HistoryConfig(
+        max_entries=10,
+        max_file_entries=20,
+        persistence_enabled=True,
+        storage_dir=temp_dir,
+        history_file="test_history_compressed.jsonl",
+        compress_states=True  # Enable compression for tests
     )
 
 
@@ -54,6 +69,13 @@ def history_manager_with_persistence(history_config_with_persistence):
     """Create a history manager with persistence."""
     from history import GameHistoryManager
     return GameHistoryManager(history_config_with_persistence)
+
+
+@pytest.fixture
+def history_manager_with_compression(history_config_with_compression):
+    """Create a history manager with compression enabled."""
+    from history import GameHistoryManager
+    return GameHistoryManager(history_config_with_compression)
 
 
 @pytest.fixture
@@ -149,13 +171,13 @@ class TestHistoryWithSchemaIntegration:
         assert isinstance(states[0], type(mock_game_state))
         assert states[0].game_time == 120.5
     
-    def test_compressed_state_storage(self, history_manager_with_persistence, mock_game_state):
+    def test_compressed_state_storage(self, history_manager_with_compression, mock_game_state):
         """Test that compressed states are stored correctly."""
         # Add a state
-        entry = history_manager_with_persistence.add_state(mock_game_state, game_time=120.5)
+        entry = history_manager_with_compression.add_state(mock_game_state, game_time=120.5)
         
         # Get the stored entry from file
-        file_entries = list(history_manager_with_persistence._file_entries)
+        file_entries = list(history_manager_with_compression._file_entries)
         assert len(file_entries) == 1
         
         # The compressed data should have summary fields

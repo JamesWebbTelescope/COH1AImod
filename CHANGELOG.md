@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
+- **Complete Phase 0 Testing Plan** (`TEST_PLAN.md`) - Comprehensive testing plan expanded from Steps 1-2 to full Phase 0 validation
+  - Added Tests 3-7: File I/O, IPC round-trip, Latency verification, Fallback IPC, Command execution
+  - Added Critical Assumptions Tracking (A1-A6) with risk assessment and contingency plans
+  - Added detailed test procedures, validation checklists, and acceptance criteria for all 7 tests
+  - Added Emergency Protocol for handling critical test failures
+  - Total estimated duration: 2.5-4 hours for complete validation
+- **Phase 0 Critical Path Validation** - Defined mandatory test sequence (Tests 1 → 3 → 4 → 5) that must PASS before proceeding to Phase 1
+  - Test 3 (File I/O) marked as CRITICAL: If it fails, entire architecture must pivot to console-log relay or memory IPC
+  - Added blocking matrix showing which tests block which phases
+  - Added global acceptance criteria for all features (1.1, 1.2, 1.3, 2.1, 3.1)
+
+### Changed
+- **Game History Manager** (`python/history.py`) - Fixed game_time handling and summary generation
+  - Added game_time override in state dict serialization to ensure consistency
+  - Fixed summary initialization to include all entry type counters (states, decisions, commands, events)
+  - Fixed summary update logic to merge new data instead of replacing
+- **Cost/Rate Limiter** (`python/rate_limiter.py`) - Improved error handling and token management
+  - Added try-catch for invalid CallType string conversion with DISABLED fallback
+  - Fixed token usage to prevent negative values with max(0, new_tokens) check
+  - Simplified budget reset logic by removing redundant time checks
+- **Schema Definitions** (`python/schema.py`) - Added default values to dataclass fields
+  - ResourceData: Added default values (0) for current, income, max
+  - SquadData: Added default value (None) for target field
+  - PopulationData: Added default values (0, 100) for current and max
+
+### Fixed
+- **History Integration Tests** (`tests/integration/test_history_integration.py`) - Fixed compression test fixtures
+  - Added separate `history_config_with_compression` fixture with compression enabled
+  - Added `history_manager_with_compression` fixture for testing
+  - Fixed test to use correct fixtures for compression testing
+- **Rate Limiter Integration Tests** (`tests/integration/test_rate_limiter_integration.py`) - Fixed test configurations and timing
+  - Fixed fixtures to use proper config values (min_interval=0.0, etc.)
+  - Added explicit config creation in tests that were using undefined fixtures
+  - Fixed budget management test assertions to account for token budget exhaustion
+  - Fixed recovery test timing (increased from 5.1s to 10.1s for adaptive rate limiting)
 - **Fixed Packaging Script** (`fix_package.bat`) - Fixed mod packaging script that resolves issue with files being packaged inside temp_package/ subfolder
   - Copies SCAR files directly to temp directory root
   - Proper mod.ini creation with version 0.2.0

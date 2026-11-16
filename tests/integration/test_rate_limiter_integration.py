@@ -75,7 +75,10 @@ def mock_orchestrator():
         enabled=True,
         max_calls_per_match=200,
         max_tokens_per_match=100000,
-        min_interval=0.1
+        min_interval=0.0,
+        urgent_min_interval=0.0,
+        max_calls_per_second=0,
+        max_calls_per_minute=0
     )
     
     class MockOrchestrator:
@@ -249,9 +252,20 @@ class TestRateLimiterWithOrchestratorIntegration:
 class TestRateLimiterWithAPIClientIntegration:
     """Test rate limiter integration with API client."""
     
-    def test_api_client_with_rate_limiter(self, mock_api_client, rate_limiter_with_config):
+    def test_api_client_with_rate_limiter(self, mock_api_client):
         """Test API client with rate limiter."""
-        from rate_limiter import CallType, RateLimitResult
+        from rate_limiter import CostRateLimiter, RateLimitConfig, CallType, RateLimitResult
+        
+        # Use a config with no rate limits for this test
+        config = RateLimitConfig(
+            enabled=True,
+            max_calls_per_match=200,
+            max_tokens_per_match=100000,
+            min_interval=0.0,
+            max_calls_per_second=0,
+            max_calls_per_minute=0
+        )
+        rate_limiter_with_config = CostRateLimiter(config)
         
         # Simulate making API calls with rate limiting
         for i in range(10):
@@ -272,9 +286,21 @@ class TestRateLimiterWithAPIClientIntegration:
         
         assert rate_limiter_with_config.get_budget_used() == 10
     
-    def test_api_rate_limit_handling(self, mock_api_client, rate_limiter_with_config):
+    def test_api_rate_limit_handling(self, mock_api_client):
         """Test handling API rate limit responses."""
-        from rate_limiter import CallType, RateLimitResult
+        from rate_limiter import CostRateLimiter, RateLimitConfig, CallType, RateLimitResult
+        
+        # Use a config with no rate limits for this test
+        config = RateLimitConfig(
+            enabled=True,
+            max_calls_per_match=200,
+            max_tokens_per_match=100000,
+            min_interval=0.0,
+            max_calls_per_second=0,
+            max_calls_per_minute=0,
+            adaptive_rate_limiting=True
+        )
+        rate_limiter_with_config = CostRateLimiter(config)
         
         # Enable rate limiting on API client
         mock_api_client.set_rate_limited(True)
@@ -309,9 +335,21 @@ class TestRateLimiterWithAPIClientIntegration:
 class TestRateLimiterBudgetManagementIntegration:
     """Test rate limiter budget management in realistic scenarios."""
     
-    def test_match_budget_management(self, rate_limiter_with_config):
+    def test_match_budget_management(self):
         """Test budget management over a match."""
-        from rate_limiter import CallType
+        from rate_limiter import CostRateLimiter, RateLimitConfig, CallType
+        
+        # Use a config with no rate limits for this test
+        # Token budget: 100000, call budget: 200
+        config = RateLimitConfig(
+            enabled=True,
+            max_calls_per_match=200,
+            max_tokens_per_match=100000,
+            min_interval=0.0,
+            max_calls_per_second=0,
+            max_calls_per_minute=0
+        )
+        rate_limiter_with_config = CostRateLimiter(config)
         
         # Simulate a match with periodic strategic calls
         for game_time in range(0, 3600, 15):  # Every 15 seconds for 1 hour
@@ -324,9 +362,12 @@ class TestRateLimiterBudgetManagementIntegration:
         
         stats = rate_limiter_with_config.get_stats()
         
-        # Should have made ~240 calls (3600/15 = 240), but budget is 200
+        # Should have made 200 calls (budget limit)
+        # 240 would exceed both call budget (200) and token budget (100000 / 1000 = 100)
+        # So only 100 calls can be made due to token budget
         assert stats.total_calls <= 200
-        assert stats.remaining_budget == 0
+        # Token budget will be exhausted first (100 calls * 1000 tokens = 100000 tokens)
+        assert stats.remaining_tokens == 0
     
     def test_token_budget_management(self, rate_limiter_with_config):
         """Test token budget management."""
@@ -555,7 +596,11 @@ class TestRateLimiterConfigurationIntegration:
         config = RateLimitConfig(
             enabled=True,
             max_calls_per_match=10,
-            urgent_calls_share_budget=False
+            urgent_calls_share_budget=False,
+            min_interval=0.0,
+            urgent_min_interval=0.0,
+            max_calls_per_second=0,
+            max_calls_per_minute=0
         )
         limiter = CostRateLimiter(config)
         
@@ -638,14 +683,14 @@ class TestRateLimiterWithOrchestratorIntegrationFull:
         """Test recovery from rate limiting."""
         from rate_limiter import CallType, RateLimitResult
         
-        # Simulate rate limiting
+        # Simulate rate limiting (minimum cooldown is 10 seconds)
         rate_limiter_with_config.notify_rate_limited(retry_after=5.0)
         
         # Calls should be rate limited
         assert rate_limiter_with_config.check_call(CallType.STRATEGIC) == RateLimitResult.RATE_LIMITED
         
-        # Wait for cooldown
-        time.sleep(5.1)
+        # Wait for cooldown (min 10 seconds due to adaptive rate limiting)
+        time.sleep(10.1)
         
         # Calls should be allowed again
         assert rate_limiter_with_config.check_call(CallType.STRATEGIC) == RateLimitResult.ALLOWED

@@ -80,9 +80,9 @@ class Difficulty(Enum):
 @dataclass
 class ResourceData:
     """Player resource data."""
-    current: int
-    income: int
-    max: int
+    current: int = 0
+    income: int = 0
+    max: int = 0
     
     def to_dict(self) -> Dict[str, int]:
         return {
@@ -151,7 +151,7 @@ class SquadData:
     vet_level: int
     position: Position
     posture: str
-    target: Optional[int]
+    target: Optional[int] = None
     in_combat: bool = False
     under_fire: bool = False
     suppressed: bool = False
@@ -335,8 +335,8 @@ class BuildQueueItem:
 @dataclass
 class PopulationData:
     """Population data."""
-    current: int
-    max: int
+    current: int = 0
+    max: int = 100
     
     def to_list(self) -> List[int]:
         return [self.current, self.max]

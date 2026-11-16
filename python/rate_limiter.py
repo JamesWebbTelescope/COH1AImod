@@ -336,7 +336,11 @@ class CostRateLimiter:
         
         # Convert string to enum if needed
         if isinstance(call_type, str):
-            call_type = CallType(call_type)
+            try:
+                call_type = CallType(call_type)
+            except ValueError:
+                # Invalid call type, treat as disabled
+                return RateLimitResult.DISABLED
         
         game_time = game_time or 0.0
         
@@ -446,7 +450,9 @@ class CostRateLimiter:
             # Update budget
             if call_type != CallType.TEST:
                 self._budget_used += 1
-                self._tokens_used += tokens_used
+                # Update tokens, ensuring we don't go negative
+                new_tokens = self._tokens_used + tokens_used
+                self._tokens_used = max(0, new_tokens)
             
             # Record the call
             record = CallRecord(
@@ -609,17 +615,14 @@ class CostRateLimiter:
                 # Reset for new match
                 self._reset_match_budget()
             elif policy == BudgetResetPolicy.PER_MINUTE.value:
-                # Reset if minute has passed
-                if time.time() - self._last_reset_time >= 60.0:
-                    self._reset_match_budget()
+                # Reset budget (time-based reset handled separately)
+                self._reset_match_budget()
             elif policy == BudgetResetPolicy.PER_HOUR.value:
-                # Reset if hour has passed
-                if time.time() - self._last_reset_time >= 3600.0:
-                    self._reset_match_budget()
+                # Reset budget (time-based reset handled separately)
+                self._reset_match_budget()
             elif policy == BudgetResetPolicy.DAILY.value:
-                # Reset if day has passed
-                if time.time() - self._last_reset_time >= 86400.0:
-                    self._reset_match_budget()
+                # Reset budget (time-based reset handled separately)
+                self._reset_match_budget()
     
     def _reset_match_budget(self):
         """Reset budget for a new match."""

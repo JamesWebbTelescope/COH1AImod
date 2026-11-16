@@ -1,33 +1,41 @@
-# Phase 0 Testing Plan - Steps 1 & 2
-## SCAR Mod Loading & State Collection Tests
+# Phase 0 Testing Plan - Complete Validation
+## SCAR Mod Loading, State Collection, IPC, and Critical Assumption Testing
 
 All `coh1ai_data/` paths below refer to the folder under the CoH1 installation directory (the same directory as `RelicCOH.exe`), not the mod repository. Run data-file commands from that directory or use its absolute path. IPC snapshots and commands use `.json`; persistent logs use JSON Lines (`.jsonl`).
 
 **Project**: CoH1 × Mistral AI Mod  
 **Phase**: 0 - Foundation (IPC Spike)  
-**Objective**: Verify SCAR mod loads in CoH1 and game state data is collected correctly  
-**Documentation**: Based on PROTOTYPE_DEVELOPMENT_PLAN.md Steps 0.1-0.3 & Features 1.1, 2.1  
+**Objective**: Verify SCAR mod loads, IPC works, state is collected, and **ALL CRITICAL ASSUMPTIONS** are validated  
+**Documentation**: Based on PROTOTYPE_DEVELOPMENT_PLAN.md Steps 0.1-0.6 & Features 1.1, 1.2, 1.3, 2.1, 3.1  
 
 ---
 
 ## 📋 TEST OVERVIEW
 
-This plan covers **Phase 0 Step 1 (SCAR Mod Framework)** and **Step 2 (State Collection)** validation:
+This plan covers **Phase 0 COMPLETE validation** including all critical assumptions:
 
-| **Test** | **Feature** | **Objective** | **Estimated Time** |
-|----------|-------------|---------------|-------------------|
-| Test 1 | Feature 1.1: SCAR Mod Framework | Verify mod loads successfully in CoH1 skirmish | 20-40 minutes |
-| Test 2 | Feature 2.1: Game State Collector | Verify all game data points are collected accurately | 20-30 minutes |
+| **Test** | **Feature** | **Objective** | **Est. Time** | **Critical Assumption** | **Blocks** |
+|----------|-------------|---------------|---------------|------------------------|------------|
+| Test 1 | Feature 1.1 | Verify mod loads in CoH1 | 20-40 min | SCAR modding works | All |
+| Test 2 | Feature 2.1 | Verify game data collection | 20-30 min | SCAR can access data | Phase 1+ |
+| **Test 3** | **Feature 1.2** | **Verify SCAR file I/O** | **15-25 min** | **SCAR can write/read files** | **ALL** |
+| **Test 4** | **Feature 1.2** | **Verify IPC round-trip** | **20-30 min** | **SCAR↔Python comms work** | Phase 1+ |
+| **Test 5** | **Feature 1.3** | **Verify latency <200ms** | **25-35 min** | **IPC meets performance** | Phase 1+ |
+| Test 6 | Feature 1.2 | Test fallback IPC methods | 30-45 min | Alternatives if file I/O fails | Contingency |
+| **Test 7** | **Feature 3.1** | **Verify command execution** | **20-30 min** | **SCAR can execute commands** | Phase 2+ |
 
-**Total Estimated Duration**: 40-70 minutes
+**Total Estimated Duration**: 2.5-4 hours
+
+> **⚠️ CRITICAL PATH**: Tests 1 → **3** → 4 → 5 must all PASS before proceeding to Phase 1.
+> **If Test 3 fails**: Entire architecture must be revised. **STOP ALL DEVELOPMENT**.
 
 ---
 
-## 🎯 ACCEPTANCE CRITERIA
+## 🎯 GLOBAL ACCEPTANCE CRITERIA
 
 ### Feature 1.1: SCAR Mod Framework
 - [ ] Empty mod loads successfully in CoH1 skirmish
-- [ ] Mod can be packaged as .sga file
+- [ ] Mod can be packaged as .sga file *(Optional for CoH1 - direct .scar files work without packaging)*
 - [ ] Mod executes custom SCAR/Lua code
 - [ ] No crashes or errors on load
 
@@ -37,6 +45,37 @@ This plan covers **Phase 0 Step 1 (SCAR Mod Framework)** and **Step 2 (State Col
 - [ ] No performance impact on game
 - [ ] Handles edge cases (no units, no enemies visible)
 
+### Feature 1.2: IPC Channel Implementation
+- [ ] Data can be sent from SCAR to external process
+- [ ] Commands can be received from external process to SCAR
+- [ ] Round-trip communication works end-to-end
+- [ ] **At least ONE IPC method proven** (file, memory, OR console)
+
+### Feature 1.3: Latency Verification
+- [ ] Measured round-trip time <200ms
+- [ ] Latency consistent across multiple test runs
+- [ ] Documentation of latency measurements
+
+### Feature 3.1: Command Executor API
+- [ ] All command types can be executed by SCAR
+- [ ] Commands execute successfully in game
+- [ ] Error handling for invalid commands
+
+---
+
+## 🚨 CRITICAL ASSUMPTIONS TRACKING
+
+| **#** | **Assumption** | **Test** | **Risk** | **Status** | **Contingency** |
+|-------|----------------|----------|----------|------------|-----------------|
+| A1 | SCAR can write files at runtime | Test 3 | **HIGH/CRITICAL** | [ ] | Use memory IPC or console relay |
+| A2 | SCAR can access all game data | Test 2 | MEDIUM/HIGH | [ ] | Memory scanning for missing data |
+| A3 | IPC round-trip <200ms | Test 5 | MEDIUM/HIGH | [ ] | Optimize, accept higher latency |
+| A4 | SCAR can execute commands | Test 7 | MEDIUM/HIGH | [ ] | Alternative command injection |
+| A5 | JSON parsing works in SCAR | Test 2 | LOW/MEDIUM | [ ] | Fallback parser |
+| A6 | Fallback IPC works | Test 6 | LOW/HIGH | [ ] | Use best available |
+
+> **⚠️ IF A1 FAILS**: Architecture must pivot to console-log relay or memory IPC. **ALL development stops** until resolved.
+
 ---
 
 ## 🛠️ PREREQUISITES
@@ -44,42 +83,55 @@ This plan covers **Phase 0 Step 1 (SCAR Mod Framework)** and **Step 2 (State Col
 ### Required Software
 - [ ] **Company of Heroes 1** - Installed and working
 - [ ] **SCAR Modding Framework** - Installed and configured
-- [ ] **Python 3.10+** - For post-test validation scripts
+- [ ] **Python 3.10+** - For validation scripts and IPC testing
+- [ ] **Python packages**: `pytest`, `numpy`, `psutil`
 
 ### Required Files
-Ensure all SCAR files are in place:
 ```
 COH1AImod/
 ├── scar/
-│   ├── main.scar          # Entry point (OnScriptLoad, OnGameUpdate)
-│   ├── config.scar        # Configuration constants
-│   ├── state_collector.scar # Game state collection (ebx: API)
-│   └── ipc.scar           # IPC communication (file-based)
+│   ├── main.scar              # Entry point
+│   ├── config.scar            # Configuration
+│   ├── state_collector.scar   # Game state collection
+│   ├── ipc.scar               # File-based IPC
+│   ├── command_executor.scar  # Command execution
+│   ├── test_file_io.scar      # Test 3: File I/O test
+│   ├── test_ipc.scar          # Test 4: IPC test
+│   ├── test_commands.scar     # Test 7: Command test
+│   └── console_relay.scar     # Test 6: Console relay
+├── python/
+│   ├── ipc_reader.py          # Python file reader
+│   ├── ipc_writer.py          # Python command writer
+│   ├── latency_tester.py      # Test 5: Latency measurement
+│   ├── console_monitor.py     # Test 6: Console monitor
+│   └── validate_state.py      # Test 2: State validation
 └── coh1ai_data/
-    └── config.json        # Runtime configuration
+    └── config.json            # Runtime configuration
 ```
 
 ### Environment Setup
 ```bash
-# 1. Create test results directory
+# 1. Create test directories
 mkdir -p test_results/phase0
-
-# 2. Ensure data directory exists
 mkdir -p coh1ai_data
 
-# 3. Create test configuration (optional)
-cp coh1ai_data/config.json coh1ai_data/config_test.json
+# 2. Set permissions (critical for file I/O test)
+chmod 777 coh1ai_data
+
+# 3. Install dependencies
+pip install pytest numpy psutil
+
+# 4. Create symlinks for easy access
+ln -s $(pwd)/python ipc_tools 2>/dev/null || true
 ```
 
 ---
 
 ## 🧪 TEST 1: SCAR Mod Loading (Feature 1.1)
 
-**Objective**: Verify the SCAR mod loads successfully in Company of Heroes 1 skirmish mode without errors.
+**Objective**: Verify the SCAR mod loads successfully in Company of Heroes 1 skirmish mode.
 
 ### Test Setup
-
-#### Step 1.1: Package SCAR Files for CoH1
 **Method A: Manual Directory Structure**
 ```
 Company of Heroes\mods\coh1ai_phase0_test\
@@ -89,533 +141,908 @@ Company of Heroes\mods\coh1ai_phase0_test\
 └── ipc.scar
 ```
 
-**Method B: Create .sga Archive**
-```bash
-# Using SCAR compiler (if available)
-scar_compiler scar/*.scar -o coh1ai_phase0_test.sga
-# Copy .sga to Company of Heroes\mods\ directory
-```
+**Method B: .sga Archive (CoH2 Only - NOT for CoH1)**
+> **Note for CoH1**: SCAR files do NOT need compilation. CoH1 loads `.scar` files directly from the mod folder. The `.sga` format is for Company of Heroes 2, not CoH1.
+>
+> **For CoH1**: Use Method A only. Do NOT attempt to create `.sga` files.
 
-#### Step 1.2: Verify File Locations
-- Confirm all `.scar` files are in the mod directory
-- Ensure files have correct `.scar` extension (not `.lua`)
-- Verify file permissions allow reading by CoH1
+**If you actually need .sga for some reason**:
+```bash
+# CoH1 does not have a scar_compiler tool
+# Instead, use the Relic COH toolset or manually package:
+# 1. Create a .sga file using Relic's SGA archiver (if available)
+# 2. Or simply use Method A (recommended for CoH1)
+```
 
 ### Test Execution
+1. Launch CoH1 → Skirmish → Mods tab
+2. Enable `coh1ai_phase0_test`
+3. Select any map/AI → Start Game
+4. Observe console for initialization messages
 
-#### Step 1.3: Load Mod in CoH1
-1. Launch **Company of Heroes 1**
-2. Navigate to **Skirmish** mode
-3. Click **Mods** tab
-4. **Enable** `coh1ai_phase0_test` (or your mod name)
-5. Select any map and AI opponent
-6. Click **Start Game**
-
-#### Step 1.4: Observe Initialization
-**Expected Console Output** (if SCAR console is visible):
-```
-SCRIPT LOADED: CoH1 Mistral AI Mod v0.2.0
-Initializing...
-Initializing configuration
-Configuration initialized successfully
-Initializing state collector
-State collector initialized successfully
-Initializing IPC system
-IPC system initialized successfully
-Initialization COMPLETE
-Mod is now active
-```
-
-**Expected Behavior**:
-- Game starts normally
-- No crashes or error popups
-- AI functions normally
-- No visible impact on game performance
-
-### Test Validation
-
-#### Validation Checklist
+### Validation Checklist
 - [ ] Mod appears in CoH1 mod list
-- [ ] Mod can be enabled without errors
-- [ ] Game starts successfully with mod enabled
-- [ ] No error messages in SCAR console
-- [ ] Initialization messages appear (if console visible)
-- [ ] Game runs normally for at least 30 seconds
-- [ ] No crashes or freezes
+- [ ] Mod enables without errors
+- [ ] Game starts successfully
+- [ ] No error messages in console
+- [ ] Initialization messages appear
+- [ ] Game runs 1+ minute without crashes
 
-#### Manual Verification
-1. **Visual Check**: No error dialogs or console errors
-2. **Gameplay Check**: AI behaves normally, units move and fight
-3. **Time Check**: Game runs for minimum 1 minute without issues
-
-### Test Data Collection
-
-**Create Test Report**: `test_results/phase0/test1_mod_loading.txt`
-
+### Test Report
 ```bash
-# Run this after test completion
-echo "=== TEST 1: SCAR Mod Loading ===" > test_results/phase0/test1_mod_loading.txt
-echo "Date: $(date)" >> test_results/phase0/test1_mod_loading.txt
-echo "CoH1 Version: [Enter version]" >> test_results/phase0/test1_mod_loading.txt
-echo "SCAR Version: [Enter version]" >> test_results/phase0/test1_mod_loading.txt
-echo "" >> test_results/phase0/test1_mod_loading.txt
-echo "Results:" >> test_results/phase0/test1_mod_loading.txt
-echo "- Mod loads in CoH1: [PASS/FAIL]" >> test_results/phase0/test1_mod_loading.txt
-echo "- Mod appears in mod list: [PASS/FAIL]" >> test_results/phase0/test1_mod_loading.txt
-echo "- Game starts normally: [PASS/FAIL]" >> test_results/phase0/test1_mod_loading.txt
-echo "- No errors in console: [PASS/FAIL]" >> test_results/phase0/test1_mod_loading.txt
-echo "- No crashes: [PASS/FAIL]" >> test_results/phase0/test1_mod_loading.txt
-echo "" >> test_results/phase0/test1_mod_loading.txt
-echo "Notes:" >> test_results/phase0/test1_mod_loading.txt
-echo "[Add any observations, errors, or unexpected behavior]" >> test_results/phase0/test1_mod_loading.txt
+echo "=== TEST 1: SCAR Mod Loading ===" > test_results/phase0/test1_results.txt
+echo "Date: $(date)" >> test_results/phase0/test1_results.txt
+echo "Status: [PASS/FAIL]" >> test_results/phase0/test1_results.txt
+echo "Notes: [Observations]" >> test_results/phase0/test1_results.txt
 ```
-
-### Troubleshooting
-
-| **Issue** | **Diagnosis** | **Solution** |
-|-----------|---------------|--------------|
-| Mod not in list | Files in wrong directory | Move to `Company of Heroes\mods\[modname]\` |
-| Mod not loading | Wrong file extension | Ensure `.scar` extension, not `.lua` |
-| SCAR errors | Syntax or API issues | Check SCAR console output |
-| Game crashes | SCAR runtime error | Enable debug logging, check error details |
-| No initialization messages | Console not visible | Check CoH1 console settings |
 
 ---
 
 ## 🧪 TEST 2: State Collection (Feature 2.1)
 
-**Objective**: Verify that all game state data points are collected accurately by the SCAR mod.
+**Objective**: Verify SCAR can access and collect ALL required game data.
 
-**Prerequisites**: Test 1 must pass (mod loads successfully)
+**Critical Assumption**: SCAR can access manpower, fuel, munitions, squads, CPs, enemies, tech, queue, pop, faction.
 
 ### Test Setup
-
-#### Step 2.1: Prepare Test Environment
-1. Ensure mod is properly installed (from Test 1)
-2. Create clean test directory:
-   ```bash
-   rm -f coh1ai_data/coh1ai_state.json
-   rm -f coh1ai_data/coh1ai_commands.json
-   rm -f coh1ai_data/coh1ai_lock.tmp
-   ```
+```bash
+rm -f coh1ai_data/coh1ai_state.json
+rm -f coh1ai_data/coh1ai_lock.tmp
+```
 
 ### Test Execution
-
-#### Step 2.2: Start Game and Collect State
 1. Launch CoH1 with mod enabled
-2. Start a skirmish game
-3. Let the game run for **30-60 seconds** (to generate game state)
-4. To inspect the transient `.json` snapshot, pause/stop the Python orchestrator while leaving the match active; otherwise it may consume and delete the snapshot as soon as it is written.
+2. Start skirmish, let run 30-60 seconds
+3. **STOP Python orchestrator** (if running)
+4. Verify `coh1ai_state.json` exists
 
-#### Step 2.3: Verify State File Creation
+### Validation
 ```bash
-# Run from the CoH1 installation directory
-cd coh1ai_data
-ls -la coh1ai_state.json
-```
+# Validate JSON
+python -c "import json; json.load(open('coh1ai_data/coh1ai_state.json')); print('Valid JSON')"
 
-**Expected**: While the orchestrator is stopped and the match is active, `coh1ai_state.json` exists and has content (> 100 bytes). Restart the orchestrator after checking it.
-
-### Test Validation
-
-#### Step 2.4: Validate JSON Structure
-```bash
-# Validate JSON syntax
-python -c "import json; json.load(open('coh1ai_state.json')); print('Valid JSON')"
-
-# Pretty-print for inspection
-python -m json.tool coh1ai_state.json > state_pretty.json
-```
-
-**Expected**: Command succeeds without errors
-
-#### Step 2.5: Verify Required Fields
-Create validation script: `validate_state.py`
-
-```python
-#!/usr/bin/env python3
-"""
-Validate game state file structure and content
-"""
-import json
-import sys
-
-def validate_state_file(filepath):
-    """Validate that state file contains all required fields and valid data."""
-    
-    try:
-        with open(filepath, 'r') as f:
-            state = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"❌ FAIL: Cannot load JSON: {e}")
-        return False
-    
-    # Check top-level required fields
-    required_fields = [
-        'version', 'player', 'time', 'game_time', 'phase',
-        'resources', 'squads', 'cps', 'enemies', 'tech', 'queue', 'pop', 'faction'
-    ]
-    
-    missing_fields = [field for field in required_fields if field not in state]
-    if missing_fields:
-        print(f"❌ FAIL: Missing required fields: {missing_fields}")
-        return False
-    
-    print("✅ Top-level fields: All present")
-    
-    # Validate resources
-    resources = state.get('resources', {})
-    if not resources:
-        print("❌ FAIL: Resources missing")
-        return False
-    
-    required_resources = ['manpower', 'fuel', 'munitions']
-    for res in required_resources:
-        if res not in resources:
-            print(f"❌ FAIL: Missing resource: {res}")
-            return False
-        
-        res_data = resources[res]
-        required_res_fields = ['current', 'income', 'max']
-        missing_res_fields = [f for f in required_res_fields if f not in res_data]
-        if missing_res_fields:
-            print(f"❌ FAIL: Resource {res} missing fields: {missing_res_fields}")
-            return False
-        
-        # Validate resource values
-        if res_data['current'] < 0 or res_data['max'] <= 0:
-            print(f"❌ FAIL: Invalid {res} values: current={res_data['current']}, max={res_data['max']}")
-            return False
-    
-    print("✅ Resources: All valid")
-    
-    # Validate squads
-    squads = state.get('squads', [])
-    if not isinstance(squads, list):
-        print(f"❌ FAIL: Squads is not a list: {type(squads)}")
-        return False
-    
-    if len(squads) == 0:
-        print("⚠️  WARNING: No squads found (might be expected early game)")
-    else:
-        print(f"✅ Squads: {len(squads)} units found")
-        
-        # Check squad structure
-        for i, squad in enumerate(squads):
-            required_squad_fields = ['id', 'type', 'health', 'max_health', 'vet_level', 'pos']
-            missing_squad_fields = [f for f in required_squad_fields if f not in squad]
-            if missing_squad_fields:
-                print(f"❌ FAIL: Squad {i} missing fields: {missing_squad_fields}")
-                return False
-            
-            # Validate position
-            pos = squad.get('pos')
-            if not isinstance(pos, list) or len(pos) < 3:
-                print(f"❌ FAIL: Squad {i} has invalid position: {pos}")
-                return False
-    
-    # Validate capture points
-    cps = state.get('cps', [])
-    if not isinstance(cps, list):
-        print(f"❌ FAIL: Capture points is not a list: {type(cps)}")
-        return False
-    
-    print(f"✅ Capture Points: {len(cps)} found")
-    
-    # Validate enemies (may be empty)
-    enemies = state.get('enemies', [])
-    if not isinstance(enemies, list):
-        print(f"❌ FAIL: Enemies is not a list: {type(enemies)}")
-        return False
-    
-    print(f"✅ Enemies: {len(enemies)} visible")
-    
-    # Validate tech tree
-    tech = state.get('tech', {})
-    if not isinstance(tech, dict):
-        print(f"❌ FAIL: Tech tree is not a dict: {type(tech)}")
-        return False
-    
-    required_tech_fields = ['tier_1', 'tier_2', 'tier_3']
-    missing_tech_fields = [f for f in required_tech_fields if f not in tech]
-    if missing_tech_fields:
-        print(f"❌ FAIL: Tech tree missing fields: {missing_tech_fields}")
-        return False
-    
-    print("✅ Tech Tree: All fields present")
-    
-    # Validate build queue
-    queue = state.get('queue', [])
-    if not isinstance(queue, list):
-        print(f"❌ FAIL: Build queue is not a list: {type(queue)}")
-        return False
-    
-    print(f"✅ Build Queue: {len(queue)} items")
-    
-    # Validate population
-    pop = state.get('pop', [])
-    if not isinstance(pop, list) or len(pop) != 2:
-        print(f"❌ FAIL: Population is not [current, max]: {pop}")
-        return False
-    
-    if pop[0] < 0 or pop[1] <= 0:
-        print(f"❌ FAIL: Invalid population values: current={pop[0]}, max={pop[1]}")
-        return False
-    
-    print(f"✅ Population: {pop[0]}/{pop[1]}")
-    
-    # Validate game time
-    game_time = state.get('game_time')
-    if game_time is None or game_time < 0:
-        print(f"❌ FAIL: Invalid game_time: {game_time}")
-        return False
-    
-    print(f"✅ Game Time: {game_time:.1f}s")
-    
-    # Validate phase
-    phase = state.get('phase')
-    valid_phases = ['early', 'mid', 'late']
-    if phase not in valid_phases:
-        print(f"❌ FAIL: Invalid phase: {phase}")
-        return False
-    
-    print(f"✅ Game Phase: {phase}")
-    
-    # Validate faction
-    faction = state.get('faction')
-    valid_factions = ['allies', 'axis']
-    if faction not in valid_factions:
-        print(f"❌ FAIL: Invalid faction: {faction}")
-        return False
-    
-    print(f"✅ Faction: {faction}")
-    
-    # Summary
-    print("\n" + "="*50)
-    print("✅ ALL VALIDATION CHECKS PASSED")
-    print("="*50)
-    return True
-
-if __name__ == "__main__":
-    import os
-    
-    state_file = "coh1ai_state.json"
-    if len(sys.argv) > 1:
-        state_file = sys.argv[1]
-    
-    if not os.path.exists(state_file):
-        print(f"❌ FAIL: State file not found: {state_file}")
-        sys.exit(1)
-    
-    success = validate_state_file(state_file)
-    sys.exit(0 if success else 1)
-```
-
-Run validation:
-```bash
-python validate_state.py coh1ai_state.json > test_results/phase0/test2_validation.txt 2>&1
-```
-
-#### Step 2.6: Additional Validation Checks
-
-**Check File Size**:
-```bash
-echo "State file size:" >> test_results/phase0/test2_validation.txt
-stat -c%s coh1ai_state.json >> test_results/phase0/test2_validation.txt
-```
-
-**Check Update Frequency**:
-1. Start game and play for 30 seconds
-2. Note timestamps in state file (`time` field)
-3. Check that multiple updates occurred
-
-```bash
-# Extract timestamps from state file
-python -c "
-import json
-with open('coh1ai_state.json') as f:
-    state = json.load(f)
-    print(f'State timestamp: {state.get(\"time\", \"N/A\")}')
-    print(f'Game time: {state.get(\"game_time\", \"N/A\")}s')
-" >> test_results/phase0/test2_validation.txt
+# Run full validation
+python validate_state.py coh1ai_data/coh1ai_state.json > test_results/phase0/test2_validation.txt 2>&1
 ```
 
 ### Acceptance Criteria
+| Criteria | Status | Critical |
+|----------|--------|----------|
+| State file created | [ ] | ✅ YES |
+| Valid JSON | [ ] | ✅ YES |
+| All required fields present | [ ] | ✅ YES |
+| Resources (mp/fuel/mun) valid | [ ] | ✅ YES |
+| Squads with id/type/health/pos | [ ] | ✅ YES |
+| Capture points collected | [ ] | YES |
+| Tech tree (tier_1/2/3) valid | [ ] | ✅ YES |
+| Build queue valid | [ ] | ✅ YES |
+| Population valid | [ ] | ✅ YES |
+| Faction identified | [ ] | ✅ YES |
 
-| **Criteria** | **Verification** | **Status** |
-|--------------|-----------------|------------|
-| All data points collected accurately | Validation script passes | [ ] |
-| Collection completes within tick time budget | State file updates every ~1 second | [ ] |
-| No performance impact on game | Game runs smoothly during collection | [ ] |
-| Handles edge cases (no units, no enemies) | Validation handles empty arrays | [ ] |
-
-### Test Data Collection
-
-**Summary Report**:
+### Test Report
 ```bash
-cat > test_results/phase0/test2_state_collection.txt << 'EOF'
-=== TEST 2: State Collection ===
+cat > test_results/phase0/test2_results.txt << EOF
+=== TEST 2: State Collection (Critical: Game Data Access) ===
 Date: [DATE]
-Game Duration: [X] seconds
+Status: [PASS/FAIL]
 
-Results:
-- State file created: [PASS/FAIL]
-- Valid JSON: [PASS/FAIL]
-- All required fields present: [PASS/FAIL]
-- Resources data valid: [PASS/FAIL]
-- Squads data valid: [PASS/FAIL] ({count} squads)
-- Capture points data valid: [PASS/FAIL] ({count} CPs)
-- Enemies data valid: [PASS/FAIL] ({count} enemies)
-- Tech tree data valid: [PASS/FAIL]
-- Build queue data valid: [PASS/FAIL]
-- Population data valid: [PASS/FAIL]
-- Game time valid: [PASS/FAIL]
-- Phase valid: [PASS/FAIL]
-- Faction valid: [PASS/FAIL]
+CRITICAL ASSUMPTION: SCAR can access all required game data
+Result: [PROVEN / FAILED]
 
-File Size: [X] bytes
-Update Frequency: [Every X seconds]
-
-Notes:
-[Any observations]
-
-=== VALIDATION OUTPUT ===
-EOF
-
-python validate_state.py coh1ai_state.json >> test_results/phase0/test2_state_collection.txt 2>&1
-```
-
-### Troubleshooting
-
-| **Issue** | **Diagnosis** | **Solution** |
-|-----------|---------------|--------------|
-| No state file created | File I/O permissions | Check `coh1ai_data/` directory permissions |
-| Empty state file | Collection failed | Check SCAR console for errors |
-| Invalid JSON | Serialization error | Verify `SerializeToJSON()` in ipc.scar |
-| Missing fields | Incomplete collection | Check each collection function in state_collector.scar |
-| Negative values | API returning invalid data | Add validation in collection functions |
-| No squads found | Called too early | Wait 30+ seconds before checking |
-
----
-
-## 🎯 PHASE 0 STEPS 1 & 2 COMPLETION CHECKLIST
-
-### Feature 1.1: SCAR Mod Framework
-- [ ] Mod loads in CoH1 skirmish without errors
-- [ ] Mod can be enabled in mod selection screen
-- [ ] Custom SCAR code executes (initialization messages)
-- [ ] Game starts and runs normally
-
-### Feature 2.1: Game State Collector
-- [ ] State file (`coh1ai_state.json`) is created
-- [ ] State file contains valid JSON
-- [ ] All required fields present in state
-- [ ] Resources data is accurate (current > 0, max > 0)
-- [ ] Squads data is collected (if units exist)
-- [ ] Capture points data is collected
-- [ ] Enemies data is collected (if visible)
-- [ ] Tech tree data is collected
-- [ ] Build queue data is collected
-- [ ] Population data is collected and valid
-- [ ] Game time is tracked
-- [ ] Game phase is determined correctly
-- [ ] Faction is identified correctly
-
----
-
-## 📊 TEST SUMMARY REPORT
-
-Create `test_results/phase0/SUMMARY.md`:
-
-```markdown
-# Phase 0 Steps 1 & 2 Test Summary
-
-## Test Results
-
-### Test 1: SCAR Mod Loading (Feature 1.1)
-**Status**: [PASS/FAIL]
-
-**Details**:
-- Mod loads in CoH1: [✅/❌]
-- Mod appears in list: [✅/❌]
-- Game starts normally: [✅/❌]
-- No errors: [✅/❌]
-- No crashes: [✅/❌]
-
-**Notes**: [Any observations]
-
----
-
-### Test 2: State Collection (Feature 2.1)
-**Status**: [PASS/FAIL]
-
-**Details**:
+Details:
 - State file created: [✅/❌]
 - Valid JSON: [✅/❌]
 - All fields present: [✅/❌]
-- Resources valid: [✅/❌]
-- Squads collected: [✅/❌] ({count})
-- Capture points collected: [✅/❌] ({count})
-- Enemies collected: [✅/❌] ({count})
-- Tech tree valid: [✅/❌]
-- Build queue valid: [✅/❌]
-- Population valid: [✅/❌]
-- Game time valid: [✅/❌]
-- Phase valid: [✅/❌]
-- Faction valid: [✅/❌]
+- Resources: [✅/❌] (mp/fuel/mun)
+- Squads: [✅/❌] (id/type/health/pos)
+- Tech tree: [✅/❌] (tier_1/2/3)
+- Build queue: [✅/❌]
+- Population: [✅/❌]
+- Faction: [✅/❌]
 
-**File Size**: [X] bytes
-**Update Frequency**: Every [X] seconds
+Notes: [Missing data fields, errors]
+EOF
+```
 
-**Notes**: [Any observations]
+> **⚠️ IF FAILED**: AI cannot make decisions. **BLOCKING ISSUE** for entire project.
 
 ---
 
-## Acceptance Criteria Status
+## 🧪 TEST 3: File I/O Capabilities (Feature 1.2 - **CRITICAL ASSUMPTION**)
 
-### Feature 1.1: SCAR Mod Framework
-- [ ] Empty mod loads successfully in CoH1 skirmish
-- [ ] Mod can be packaged as .sga file
-- [ ] Mod executes custom SCAR/Lua code
-- [ ] No crashes or errors on load
+**Objective**: **PROVE SCAR can write and read files at runtime** - The SINGLE most critical test.
 
-### Feature 2.1: Game State Collector
-- [ ] All specified data points collected accurately
-- [ ] Collection completes within tick time budget
-- [ ] No performance impact on game
-- [ ] Handles edge cases (no units, no enemies visible)
+**Critical Assumption A1**: SCAR can write files at runtime (HIGH probability, CRITICAL impact)
+
+> **IF THIS TEST FAILS**: **STOP ALL DEVELOPMENT**. Architecture must pivot to console-log relay or memory IPC.
+
+### Test Setup
+Create minimal test script `scar/test_file_io.scar`:
+```scar
+-- test_file_io.scar - Minimal file I/O test
+
+function OnScriptLoad()
+    Log("=== FILE I/O TEST STARTED ===")
+    
+    -- Test 1: Write file
+    local test_data = { test = "file_write", timestamp = GameTime() }
+    local write_ok = SerializeToJSONFile("coh1ai_data/io_test_write.json", test_data)
+    if write_ok then
+        Log("✅ PASS: File write successful")
+    else
+        Log("❌ FAIL: File write failed")
+        return
+    end
+    
+    -- Test 2: Read file
+    local content = ReadFile("coh1ai_data/io_test_write.json")
+    if content and string.len(content) > 10 then
+        Log("✅ PASS: File read successful")
+    else
+        Log("❌ FAIL: File read failed")
+        return
+    end
+    
+    -- Test 3: Rapid writes (10x)
+    for i = 1, 10 do
+        local data = { test = "rapid", iteration = i }
+        if not SerializeToJSONFile("coh1ai_data/io_rapid_" .. i .. ".json", data) then
+            Log("❌ FAIL: Rapid write failed at " .. i)
+            return
+        end
+    end
+    Log("✅ PASS: Rapid writes successful")
+    
+    -- Test 4: File exists check
+    if FileExists("coh1ai_data/io_test_write.json") then
+        Log("✅ PASS: FileExists check works")
+    else
+        Log("❌ FAIL: FileExists check failed")
+    end
+    
+    Log("=== FILE I/O TEST: ALL CHECKS PASSED ===")
+end
+```
+
+### Test Execution
+1. Create mod: `Company of Heroes\mods\file_io_test\test_file_io.scar`
+2. Clean test directory: `rm -f coh1ai_data/io_test*.json`
+3. Launch CoH1, enable mod, start game
+4. Wait 5 seconds for test to complete
+
+### Validation
+```bash
+# Check files created
+cd coh1ai_data
+ls -la io_test_write.json io_rapid_*.json > ../../test_results/phase0/test3_fileio.txt
+
+# Verify content
+echo "" >> ../../test_results/phase0/test3_fileio.txt
+cat io_test_write.json >> ../../test_results/phase0/test3_fileio.txt
+
+# Check console log for PASS/FAIL messages
+# (Check CoH1 console or scar_log.txt)
+```
+
+### Acceptance Criteria
+| Criteria | Status | Critical |
+|----------|--------|----------|
+| File write successful | [ ] | ✅ **YES** |
+| File read successful | [ ] | ✅ **YES** |
+| Rapid writes (10x) successful | [ ] | ✅ **YES** |
+| FileExists check works | [ ] | YES |
+| All files contain valid JSON | [ ] | ✅ **YES** |
+
+### Test Report
+```bash
+cat > test_results/phase0/test3_results.txt << EOF
+=== TEST 3: File I/O Capabilities (CRITICAL ASSUMPTION A1) ===
+Date: [DATE]
+Status: [PASS/FAIL]
+
+CRITICAL ASSUMPTION: SCAR can write/read files at runtime
+Result: [PROVEN / **FAILED - STOP DEVELOPMENT**]
+
+Checks:
+- File write: [✅/❌]
+- File read: [✅/❌]
+- Rapid writes: [✅/❌]
+- FileExists: [✅/❌]
+- Valid JSON: [✅/❌]
+
+Files created:
+$(ls coh1ai_data/io_test*.json 2>/dev/null | wc -l) files
+
+Console output:
+[Copy PASS/FAIL messages from CoH1 console]
+
+CONTINGENCY: If failed, test console-log relay (Test 6) immediately.
+EOF
+```
+
+### Troubleshooting
+| Issue | Diagnosis | Solution |
+|-------|-----------|----------|
+| No files created | No write permissions | `chmod 777 coh1ai_data` |
+| Files empty | Write failed silently | Check SCAR console |
+| Partial files | Write interrupted | Check game load |
+| ❌ FAIL messages | SCAR API limitation | **Proceed to Test 6** |
+
+> **⚠️ IF ANY CHECK FAILS**: **DO NOT PROCEED** to Test 4 or beyond. Test console-log relay (Test 6) immediately.
+
+---
+
+## 🧪 TEST 4: IPC Round-Trip Communication (Feature 1.2)
+
+**Objective**: Verify end-to-end communication: SCAR → File → Python → File → SCAR
+
+**Prerequisites**: Test 3 MUST PASS (file I/O works)
+
+**Critical Assumption A3**: SCAR↔Python communication works via file polling
+
+### Test Setup
+1. Ensure Test 3 passed (files being written)
+2. Prepare Python reader:
+
+```python
+# python/ipc_test_reader.py
+import json
+import time
+import os
+
+def read_state(filepath, timeout=10):
+    """Read state file with timeout."""
+    start = time.time()
+    while time.time() - start < timeout:
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r') as f:
+                    return json.load(f)
+            except:
+                time.sleep(0.1)
+        time.sleep(0.1)
+    return None
+
+def write_command(filepath, command):
+    """Write command for SCAR to read."""
+    with open(filepath, 'w') as f:
+        json.dump(command, f)
+
+# Usage:
+# state = read_state('coh1ai_data/coh1ai_state.json')
+# write_command('coh1ai_data/coh1ai_commands.json', {'action': 'test'})
+```
+
+### Test Execution
+**Part A: SCAR → Python**
+1. Start CoH1 with full mod
+2. Run: `python -c "import ipc_test_reader; print(ipc_test_reader.read_state('coh1ai_data/coh1ai_state.json'))"`
+3. Verify: Python receives valid state JSON
+
+**Part B: Python → SCAR**
+1. Write test command: `python -c "import ipc_test_reader; ipc_test_reader.write_command('coh1ai_data/coh1ai_commands.json', {'test': 'roundtrip', 'id': 123})"`
+2. Check SCAR console for: `Received command: test=roundtrip`
+
+**Part C: Full Round-Trip**
+1. Start game
+2. Run Python script that reads state, writes command, waits for response:
+```python
+# test_roundtrip.py
+import ipc_test_reader as ipc
+
+# Read initial state
+state = ipc.read_state('coh1ai_data/coh1ai_state.json')
+if not state:
+    print("❌ FAIL: Could not read state from SCAR")
+    exit(1)
+
+print(f"✅ PASS: Read state from SCAR (game_time={state.get('game_time')})")
+
+# Write command
+cmd = {'action': 'ping', 'timestamp': state.get('time')}
+ipc.write_command('coh1ai_data/coh1ai_commands.json', cmd)
+print("✅ PASS: Wrote command to SCAR")
+
+# Wait for SCAR to process and write response
+import time
+state2 = ipc.read_state('coh1ai_data/coh1ai_state.json')
+if state2 and state2.get('last_command') == cmd:
+    print("✅ PASS: SCAR processed command")
+else:
+    print("❌ FAIL: Command not processed by SCAR")
+    exit(1)
+
+print("✅ PASS: Full round-trip successful")
+```
+
+### Validation
+```bash
+python test_roundtrip.py > test_results/phase0/test4_roundtrip.txt 2>&1
+```
+
+### Acceptance Criteria
+| Criteria | Status | Critical |
+|----------|--------|----------|
+| Python reads SCAR state | [ ] | ✅ YES |
+| SCAR reads Python commands | [ ] | ✅ YES |
+| Full round-trip works | [ ] | ✅ YES |
+| No data corruption | [ ] | ✅ YES |
+
+### Test Report
+```bash
+cat > test_results/phase0/test4_results.txt << EOF
+=== TEST 4: IPC Round-Trip Communication ===
+Date: [DATE]
+Status: [PASS/FAIL]
+
+CRITICAL ASSUMPTION: SCAR↔Python file-based communication works
+Result: [PROVEN / FAILED]
+
+Checks:
+- Python → SCAR state read: [✅/❌]
+- Python → SCAR command write: [✅/❌]
+- SCAR → Python command read: [✅/❌]
+- SCAR → Python response write: [✅/❌]
+- Full round-trip: [✅/❌]
+
+Latency (first read): [X]ms
+Notes: [Observations]
+EOF
+```
+
+---
+
+## 🧪 TEST 5: Latency Verification (Feature 1.3)
+
+**Objective**: Measure and verify IPC round-trip latency <200ms under game load
+
+**Prerequisites**: Test 4 MUST PASS (round-trip works)
+
+**Critical Assumption A3**: IPC latency <200ms
+
+### Test Setup
+Create latency measurement script:
+
+```python
+# python/latency_tester.py
+import json
+import time
+import os
+import statistics
+
+def measure_roundtrip(iterations=100):
+    """Measure round-trip latency for N iterations."""
+    latencies = []
+    
+    for i in range(iterations):
+        # Write command with timestamp
+        start = time.time()
+        cmd = {'action': 'latency_test', 'iteration': i, 'sent_at': start}
+        with open('coh1ai_data/coh1ai_commands.json', 'w') as f:
+            json.dump(cmd, f)
+        
+        # Wait for SCAR to process and write response
+        response_file = 'coh1ai_data/coh1ai_latency_response.json'
+        timeout = 1.0  # 1 second timeout per iteration
+        while time.time() - start < timeout:
+            if os.path.exists(response_file):
+                try:
+                    with open(response_file, 'r') as f:
+                        resp = json.load(f)
+                    if resp.get('iteration') == i:
+                        latency = (time.time() - start) * 1000  # ms
+                        latencies.append(latency)
+                        os.remove(response_file)
+                        break
+                except:
+                    time.sleep(0.001)
+            time.sleep(0.001)
+        else:
+            print(f"⚠️  Iteration {i}: Timeout")
+    
+    return latencies
+
+if __name__ == '__main__':
+    import sys
+    iterations = int(sys.argv[1]) if len(sys.argv) > 1 else 100
+    
+    print(f"Measuring {iterations} round-trip iterations...")
+    latencies = measure_roundtrip(iterations)
+    
+    if not latencies:
+        print("❌ FAIL: No successful measurements")
+        sys.exit(1)
+    
+    avg = statistics.mean(latencies)
+    min_l = min(latencies)
+    max_l = max(latencies)
+    std = statistics.stdev(latencies) if len(latencies) > 1 else 0
+    p95 = sorted(latencies)[int(len(latencies) * 0.95)]
+    
+    print(f"\n✅ SUCCESS: {len(latencies)}/{iterations} iterations completed")
+    print(f"Average latency: {avg:.2f}ms")
+    print(f"Min/Max: {min_l:.2f}ms / {max_l:.2f}ms")
+    print(f"Std Dev: {std:.2f}ms")
+    print(f"95th Percentile: {p95:.2f}ms")
+    
+    if avg < 200:
+        print(f"\n✅ PASS: Average latency {avg:.2f}ms < 200ms requirement")
+    else:
+        print(f"\n❌ FAIL: Average latency {avg:.2f}ms >= 200ms requirement")
+        sys.exit(1)
+```
+
+**SCAR Modification** (add to ipc.scar):
+```scar
+-- Add to OnGameUpdate or command handler
+if command.action == 'latency_test' then
+    local response = {
+        iteration = command.iteration,
+        received_at = GameTime(),
+        processed_at = GameTime()
+    }
+    SerializeToJSONFile("coh1ai_data/coh1ai_latency_response.json", response)
+end
+```
+
+### Test Execution
+1. Start CoH1 with mod
+2. Run: `python latency_tester.py 100 > test_results/phase0/test5_latency.txt 2>&1`
+3. Let it run for ~2-3 minutes
+
+### Validation
+Check output for:
+- ✅ SUCCESS: 100/100 iterations completed
+- ✅ PASS: Average latency < 200ms
+
+### Acceptance Criteria
+| Criteria | Status | Target | Critical |
+|----------|--------|--------|----------|
+| 100 iterations completed | [ ] | 100/100 | ✅ YES |
+| Average latency | [ ] | <200ms | ✅ YES |
+| Max latency | [ ] | <500ms | YES |
+| 95th percentile | [ ] | <200ms | ✅ YES |
+
+### Test Report
+```bash
+cat > test_results/phase0/test5_results.txt << EOF
+=== TEST 5: Latency Verification (CRITICAL ASSUMPTION A3) ===
+Date: [DATE]
+Status: [PASS/FAIL]
+
+CRITICAL ASSUMPTION: IPC round-trip latency <200ms
+Result: [PROVEN / FAILED]
+
+Statistics:
+- Iterations completed: [X]/100
+- Average latency: [X]ms
+- Min latency: [X]ms
+- Max latency: [X]ms
+- Std Dev: [X]ms
+- 95th Percentile: [X]ms
+
+Requirement: <200ms average
+Result: [✅ PASS / ❌ FAIL]
+
+Notes: [Observations, game conditions]
+EOF
+```
+
+---
+
+## 🧪 TEST 6: Fallback IPC Methods (Contingency)
+
+**Objective**: Test console-log relay and shared memory as fallback if file I/O fails
+
+**When to Run**: If Test 3 FAILS, or as proactive contingency testing
+
+### Part A: Console-Log Relay
+
+**Create console_relay.scar**:
+```scar
+-- Console-log relay for SCAR
+function OnScriptLoad()
+    Log("=== CONSOLE RELAY TEST ===")
+    Log("SCAR_CONSOLE:{\"test\":\"console_output\",\"timestamp\":" .. GameTime() .. "}")
+end
+
+function OnGameUpdate(deltaTime)
+    -- Periodically output state
+    if GameTime() % 5 < 0.1 then
+        Log("SCAR_CONSOLE:{\"type\":\"state\",\"time\":" .. GameTime() .. "}")
+    end
+end
+```
+
+**Create console_monitor.py**:
+```python
+# python/console_monitor.py
+import re
+import json
+import subprocess
+import time
+
+def monitor_console(log_file='coh_console.log', duration=30):
+    """Monitor CoH console log for SCAR output."""
+    # Note: This requires CoH to log to a file
+    # Alternative: Use subprocess to capture stdout if CoH can be launched that way
+    
+    scar_pattern = re.compile(r'SCAR_CONSOLE:\{(.+)\}', re.IGNORECASE)
+    
+    messages = []
+    start = time.time()
+    
+    while time.time() - start < duration:
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                for line in f:
+                    match = scar_pattern.search(line)
+                    if match:
+                        try:
+                            data = json.loads('{' + match.group(1) + '}')
+                            messages.append(data)
+                        except:
+                            pass
+        time.sleep(0.5)
+    
+    return messages
+
+if __name__ == '__main__':
+    messages = monitor_console()
+    print(f"Received {len(messages)} SCAR console messages")
+    if len(messages) > 0:
+        print(f"✅ PASS: Console relay works")
+        print(f"First message: {messages[0]}")
+    else:
+        print(f"❌ FAIL: No console messages received")
+```
+
+**Test Execution**:
+1. Enable CoH console logging (if possible)
+2. Launch CoH with console_relay.scar mod
+3. Run: `python console_monitor.py > test_results/phase0/test6_console.txt 2>&1`
+
+### Part B: Shared Memory (if SCAR supports it)
+
+Test if SCAR can access shared memory or memory-mapped files.
+
+### Test Report
+```bash
+cat > test_results/phase0/test6_results.txt << EOF
+=== TEST 6: Fallback IPC Methods (Contingency) ===
+Date: [DATE]
+Status: [PASS/FAIL]
+
+Method | Status | Notes
+------|--------|------
+Console-Log Relay | [✅/❌] | [Details]
+Shared Memory | [✅/❌/➖] | [Not tested/Not supported]
+
+Recommendation: [Primary IPC method to use]
+EOF
+```
+
+> **If Test 3 failed**: Use the first working fallback method as your primary IPC. Update all architecture to use this method.
+
+---
+
+## 🧪 TEST 7: Command Execution (Feature 3.1 - Critical Assumption)
+
+**Objective**: Verify SCAR can execute game commands (BUILD, CAPTURE, ATTACK_MOVE, etc.)
+
+**Critical Assumption A4**: SCAR can execute commands that affect gameplay
+
+**Prerequisites**: Test 1 passes (mod loads)
+
+### Test Setup
+Create command test mod `scar/test_commands.scar`:
+```scar
+-- test_commands.scar
+function OnScriptLoad()
+    Log("=== COMMAND EXECUTION TEST ===")
+end
+
+function OnGameUpdate(deltaTime)
+    -- Only run once at game start
+    if not this.command_test_done then
+        this.command_test_done = true
+        
+        -- Test 1: Select unit (if any exist)
+        local units = GetPlayerUnits(0)  -- Player 0 (us)
+        if #units > 0 then
+            local unit = units[1]
+            Log("✅ PASS: Can access unit list")
+            
+            -- Test 2: Get unit position
+            local pos = GetUnitPosition(unit)
+            if pos then
+                Log("✅ PASS: Can get unit position")
+            else
+                Log("❌ FAIL: Cannot get unit position")
+            end
+            
+            -- Test 3: Move unit (safe test)
+            local target_pos = {pos[1] + 10, pos[2], pos[3] + 10}
+            if IssueCommand(unit, "move", target_pos) then
+                Log("✅ PASS: Can issue move command")
+            else
+                Log("❌ FAIL: Cannot issue move command")
+            end
+            
+            -- Test 4: Build command (if enough resources)
+            if GetResource("manpower") > 100 then
+                if IssueCommand(unit, "build", "barracks") then
+                    Log("✅ PASS: Can issue build command")
+                else
+                    Log("❌ FAIL: Cannot issue build command")
+                end
+            else
+                Log("⚠️  SKIP: Build test (insufficient resources)")
+            end
+            
+            -- Test 5: Attack command
+            local enemies = GetVisibleEnemies()
+            if #enemies > 0 then
+                if IssueCommand(unit, "attack", enemies[1]) then
+                    Log("✅ PASS: Can issue attack command")
+                else
+                    Log("❌ FAIL: Cannot issue attack command")
+                end
+            else
+                Log("⚠️  SKIP: Attack test (no enemies visible)")
+            end
+        else
+            Log("⚠️  SKIP: No units available for testing")
+        end
+        
+        Log("=== COMMAND TEST COMPLETE ===")
+    end
+end
+```
+
+### Test Execution
+1. Create mod: `Company of Heroes\mods\command_test\test_commands.scar`
+2. Launch CoH1 with mod
+3. Start game, wait 10 seconds
+4. Check console for PASS/FAIL messages
+
+### Validation
+Check CoH1 console for:
+- ✅ PASS messages for each command type
+- Game actually responding to commands (visual confirmation)
+
+### Acceptance Criteria
+| Command Type | SCAR Can Issue | Game Responds | Critical |
+|--------------|----------------|---------------|----------|
+| Unit selection | [ ] | [ ] | ✅ YES |
+| Get position | [ ] | N/A | ✅ YES |
+| MOVE | [ ] | [ ] | ✅ YES |
+| BUILD | [ ] | [ ] | ✅ YES |
+| ATTACK | [ ] | [ ] | ✅ YES |
+| CAPTURE | [ ] | [ ] | YES |
+| SET_POSTURE | [ ] | [ ] | YES |
+| PRODUCE | [ ] | [ ] | YES |
+
+### Test Report
+```bash
+cat > test_results/phase0/test7_results.txt << EOF
+=== TEST 7: Command Execution (CRITICAL ASSUMPTION A4) ===
+Date: [DATE]
+Status: [PASS/FAIL]
+
+CRITICAL ASSUMPTION: SCAR can execute game commands
+Result: [PROVEN / FAILED]
+
+Command Type | SCAR Can Issue | Game Responds
+-------------|----------------|---------------
+MOVE | [✅/❌] | [✅/❌]
+BUILD | [✅/❌] | [✅/❌]
+ATTACK | [✅/❌] | [✅/❌]
+CAPTURE | [✅/❌] | [✅/❌]
+SET_POSTURE | [✅/❌] | [✅/❌]
+PRODUCE | [✅/❌] | [✅/❌]
+
+Console Output:
+[Copy relevant messages]
+
+Notes: [Any issues, workarounds]
+EOF
+```
+
+> **⚠️ IF FAILED**: The AI cannot control units. This is a **BLOCKING ISSUE** for Phase 2.
+
+---
+
+## 📊 PHASE 0 COMPLETE TEST SUMMARY
+
+Create `test_results/phase0/FINAL_SUMMARY.md`:
+
+```markdown
+# Phase 0 Complete Validation Summary
+
+**Date**: [YYYY-MM-DD]  
+**Tester**: [Name]  
+**CoH1 Version**: [Version]  
+**SCAR Version**: [Version]
+
+---
+
+## Executive Summary
+
+**PHASE 0 STATUS**: [✅ **PASS - PROCEED TO PHASE 1** / ❌ **FAIL - DO NOT PROCEED**]
+
+**Critical Assumptions Status**:
+- A1 (File I/O): [✅ PROVEN / ❌ FAILED]
+- A2 (Data Access): [✅ PROVEN / ❌ FAILED]
+- A3 (Latency): [✅ PROVEN / ❌ FAILED]
+- A4 (Command Execution): [✅ PROVEN / ❌ FAILED]
+
+**Primary IPC Method**: [File Polling / Console-Log Relay / Shared Memory]
+
+---
+
+## Test Results Matrix
+
+| Test | Feature | Status | Critical | Blocking |
+|------|---------|--------|----------|----------|
+| Test 1 | SCAR Mod Loading | [✅/❌] | ✅ YES | ✅ YES |
+| Test 2 | State Collection | [✅/❌] | ✅ YES | ✅ YES |
+| Test 3 | File I/O | [✅/❌] | ✅ **YES** | ✅ **YES** |
+| Test 4 | IPC Round-Trip | [✅/❌] | ✅ YES | ✅ YES |
+| Test 5 | Latency | [✅/❌] | ✅ YES | ✅ YES |
+| Test 6 | Fallback IPC | [✅/❌/➖] | ⚠️ NO | ❌ NO |
+| Test 7 | Command Execution | [✅/❌] | ✅ YES | ✅ YES |
+
+---
+
+## Detailed Results
+
+### Test 1: SCAR Mod Loading
+**Status**: [PASS/FAIL]
+- Mod loads: [✅/❌]
+- No crashes: [✅/❌]
+- Initialization: [✅/❌]
+
+**Notes**: [Observations]
+
+---
+
+### Test 2: State Collection
+**Status**: [PASS/FAIL]
+**Critical Assumption A2**: SCAR can access all required game data
+
+- All fields present: [✅/❌]
+- Resources: [✅/❌]
+- Squads: [✅/❌]
+- Tech tree: [✅/❌]
+- Build queue: [✅/❌]
+- Population: [✅/❌]
+- Faction: [✅/❌]
+
+**Missing Data**: [List any missing fields]
+
+---
+
+### Test 3: File I/O Capabilities
+**Status**: [PASS/❌ **FAIL**]
+**Critical Assumption A1**: SCAR can write/read files at runtime
+
+- File write: [✅/❌]
+- File read: [✅/❌]
+- Rapid writes: [✅/❌]
+- FileExists: [✅/❌]
+
+**Result**: [PROVEN / **FAILED - USE FALLBACK**]
+
+---
+
+### Test 4: IPC Round-Trip
+**Status**: [PASS/FAIL]
+- Python → SCAR read: [✅/❌]
+- SCAR → Python write: [✅/❌]
+- Full round-trip: [✅/❌]
+
+---
+
+### Test 5: Latency Verification
+**Status**: [PASS/FAIL]
+**Critical Assumption A3**: IPC latency <200ms
+
+- Iterations: [X]/100
+- Average: [X]ms
+- Max: [X]ms
+- 95th %ile: [X]ms
+- **Requirement Met**: [✅/❌]
+
+---
+
+### Test 6: Fallback IPC
+**Status**: [PASS/➖/FAIL]
+- Console-Log: [✅/❌/➖]
+- Shared Memory: [✅/❌/➖]
+
+---
+
+### Test 7: Command Execution
+**Status**: [PASS/FAIL]
+**Critical Assumption A4**: SCAR can execute game commands
+
+- MOVE: [✅/❌]
+- BUILD: [✅/❌]
+- ATTACK: [✅/❌]
+- CAPTURE: [✅/❌]
+- SET_POSTURE: [✅/❌]
+- PRODUCE: [✅/❌]
+
+---
+
+## Critical Assumptions Validation
+
+| Assumption | Test | Status | Impact if Failed |
+|------------|------|--------|-------------------|
+| A1: SCAR file I/O | Test 3 | [✅/❌] | **Project blocking** |
+| A2: Game data access | Test 2 | [✅/❌] | **Project blocking** |
+| A3: IPC latency <200ms | Test 5 | [✅/❌] | Phase 1 blocking |
+| A4: Command execution | Test 7 | [✅/❌] | Phase 2 blocking |
 
 ---
 
 ## Issues Found
 
-1. **[Issue Title]**
-   - **Severity**: [High/Medium/Low]
-   - **Description**: [Detailed description]
-   - **Reproduction**: [Steps to reproduce]
+1. **Issue #1**
+   - **Test**: [Test Number]
+   - **Severity**: [CRITICAL/HIGH/MEDIUM/LOW]
+   - **Description**: [Details]
+   - **Workaround**: [If any]
+   - **Status**: [Open/Resolved]
+
+2. **Issue #2**
+   - **Test**: [Test Number]
+   - **Severity**: [CRITICAL/HIGH/MEDIUM/LOW]
+   - **Description**: [Details]
    - **Workaround**: [If any]
    - **Status**: [Open/Resolved]
 
 ---
 
-## Recommendations
+## Decision Matrix
 
-[List any recommendations for improvements or next steps]
+| Scenario | Action |
+|----------|--------|
+| All tests PASS | ✅ **Proceed to Phase 1** |
+| Test 3 FAILS | ❌ **STOP** - Use fallback IPC from Test 6 |
+| Tests 2 or 7 FAIL | ❌ **STOP** - Investigate data/command access |
+| Test 5 FAILS (latency >200ms) | ⚠️ **Investigate** - Optimize or accept higher latency |
 
 ---
 
 ## Next Steps
 
-- [ ] If all tests pass: Proceed to Test 3 (IPC Communication)
-- [ ] If any tests fail: Resolve issues and retest
-- [ ] Document solutions to any issues found
+- [ ] **If all critical tests pass**: Proceed to Phase 1 (State Collection & Serialization)
+- [ ] **If Test 3 fails**: Implement fallback IPC method from Test 6
+- [ ] **If Test 2 or 7 fails**: Investigate SCAR API limitations, find workarounds
+- [ ] **If Test 5 fails**: Optimize IPC, consider reducing data size or frequency
 
 ---
 
-*Test Date*: [YYYY-MM-DD]  
-*Tester*: [Name]  
-*CoH1 Version*: [Version]  
-*SCAR Version*: [Version]
+## Recommendations
+
+[List specific recommendations based on test results]
+
+---
+
+## Conclusion
+
+**Phase 0 Validation**: [✅ COMPLETE / ❌ INCOMPLETE]
+
+**Architecture Validated**: [✅ YES / ❌ NO]
+
+**Ready for Phase 1**: [✅ YES / ❌ NO]
+
+---
+
+*Test Conducted*: [YYYY-MM-DD]  
+*Validator*: [Name]
 ```
 
 ---
@@ -630,40 +1057,54 @@ Create `test_results/phase0/SUMMARY.md`:
 
 ---
 
-## 🎮 TESTING CHECKLIST (Printable)
+## 🎮 QUICK START TEST SEQUENCE
 
-```
-□ Test 1: SCAR Mod Loading
-  □ Mod files packaged correctly
-  □ Mod appears in CoH1 mod list
-  □ Mod loads without errors
-  □ Game starts normally
-  □ Initialization messages appear
-  □ No crashes or freezes
+For rapid validation of critical path:
 
-□ Test 2: State Collection
-  □ State file created (coh1ai_state.json)
-  □ File contains valid JSON
-  □ All required fields present
-  □ Resources data valid
-  □ Squads data collected
-  □ Capture points data collected
-  □ Enemies data collected
-  □ Tech tree data collected
-  □ Build queue data collected
-  □ Population data valid
-  □ Game time tracked
-  □ Game phase determined
-  □ Faction identified
+```bash
+# Run critical tests in order
+# 1. Test File I/O (most critical)
+echo "=== Running Test 3: File I/O (CRITICAL) ==="
+# [Manual: Run CoH with test_file_io.scar]
 
-□ Documentation
-  □ Test results saved
-  □ Issues documented
-  □ Summary report created
+# 2. If Test 3 passes, test state collection
+echo "=== Running Test 2: State Collection ==="
+# [Manual: Run CoH with full mod, check state file]
+python validate_state.py coh1ai_data/coh1ai_state.json
+
+# 3. If both pass, test round-trip
+echo "=== Running Test 4: Round-Trip ==="
+python test_roundtrip.py
+
+# 4. If all pass, test latency
+echo "=== Running Test 5: Latency ==="
+python latency_tester.py 100
+
+# 5. Finally, test commands
+echo "=== Running Test 7: Commands ==="
+# [Manual: Run CoH with test_commands.scar]
 ```
 
 ---
 
-*Document Version*: 1.0  
-*Last Updated*: 2026-10-10  
-*Author*: Generated via developer skill
+## 🚨 EMERGENCY PROTOCOL
+
+**If Test 3 FAILS (File I/O doesn't work):**
+
+1. **IMMEDIATELY STOP** all development
+2. Run Test 6 (Fallback IPC)
+3. If console-log relay works:
+   - Re-architect ALL IPC to use console logging
+   - Update: `scar/ipc.scar`, `python/ipc_reader.py`
+   - Re-run Tests 4-5 with new method
+4. If shared memory works:
+   - Re-architect to use shared memory
+   - Update architecture documentation
+5. **DO NOT PROCEED** to Phase 1 until IPC is proven
+
+---
+
+*Document Version*: 2.0 - Updated with Critical Assumption Testing  
+*Last Updated*: 2026-10-25  
+*Author*: Generated via analysis + developer skill  
+*Based On*: PROTOTYPE_DEVELOPMENT_PLAN.md v1.0
