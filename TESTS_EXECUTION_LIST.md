@@ -1,22 +1,20 @@
 # 🎯 Tests Execution List - CoH1 × Mistral AI Mod
 
-**Document Version**: 3.0.0  
-**Last Updated**: 2026-11-21  
+**Document Version**: 1.0.0  
+**Last Updated**: 2026-10-25  
 **Purpose**: Actionable list of tests to execute NOW and tests to IMPLEMENT for future execution  
-**Status**: Phase 0-2 Complete (416+ tests passing), Phase 3 IMPLEMENTED (9/9 original + 100+ pytest tests), Phases 4-5 Tests Need Implementation
+**Status**: Phase 0-2 Complete (416+ tests passing), Phases 3-5 Tests Need Implementation
 
 ---
 
 # 🚀 EXECUTABLE TESTS (Run These NOW)
 
-These tests **already exist** and can be executed immediately to verify the current state of Phases 0-3.
-
-**Phase 3 Status**: ✅ **IMPLEMENTED** - 9/9 original tests passing, 100+ pytest tests created
+These tests **already exist** and can be executed immediately to verify the current state of Phases 0-2.
 
 ## Quick Commands
 
 ```bash
-# Run ALL existing tests (Phases 0-3)
+# Run ALL existing tests (Phases 0-2)
 cd /d/SteamLibrary/steamapps/common/Company\ of\ Heroes\ Relaunch/Mods/COh1AIMod
 python -m pytest tests/ -v --tb=short
 
@@ -27,20 +25,6 @@ python -m pytest tests/ --cov=python --cov=scar --cov-report=term-missing
 python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 python -m pytest tests/performance/ -v
-
-# Run Phase 3 tests specifically
-python tests/test_phase3_mistral.py -v
-
-# Run Phase 3 pytest tests
-python -m pytest tests/unit/test_mistral_client.py tests/unit/test_prompts.py tests/unit/test_strategist.py tests/unit/test_json_mode.py tests/unit/test_history.py tests/unit/test_rate_limiter.py -v
-
-# Run Phase 3 integration tests (requires API key)
-python -m pytest tests/integration/test_mistral_integration.py -v
-
-# Use Phase 3 test runner
-python tests/run_phase3_tests.py -v
-python tests/run_phase3_tests.py unit -v
-python tests/run_phase3_tests.py integration -v
 ```
 
 ---
@@ -152,10 +136,9 @@ python -m pytest tests/ -k "reflex" -v
 python -m pytest tests/ -k "validator" -v
 python -m pytest tests/ -k "fallback" -v
 python -m pytest tests/ -k "end_to_end" -v
-python -m pytest tests/ -k "phase3" -v
 ```
 
-**Total Existing Tests**: 425+ tests (416+ Phase 0-2 + 9 Phase 3) | **Status**: All passing ✅
+**Total Existing Tests**: 416+ tests | **Status**: All passing ✅
 
 ---
 
@@ -168,166 +151,179 @@ They are required for Phases 3-5 completion.
 
 ---
 
-## Phase 3: Strategist Integration (113+ tests - IMPLEMENTED ✅)
+## Phase 3: Strategist Integration (100 tests to create)
 
-**Status**: ✅ **CORE IMPLEMENTATION COMPLETE**
+### Mistral API Client (19 tests)
+**File to create**: `python/mistral_client.py` + `tests/unit/test_mistral_client.py` + `tests/integration/test_mistral_integration.py`
 
-All Phase 3 core functionality has been implemented and tested. The test suite includes both the original validation tests and a comprehensive pytest suite.
+```python
+# Future execution commands (once implemented):
+python -m pytest tests/unit/test_mistral_client.py -v           # 15 unit tests
+python -m pytest tests/integration/test_mistral_integration.py -v   # 4 integration tests
+```
+
+**Tests to implement**:
+- test_api_connection_success, test_api_connection_failure
+- test_authentication_success, test_authentication_failure
+- test_model_selection_large, test_model_selection_small, test_invalid_model_selection
+- test_api_timeout_handling, test_rate_limit_handling, test_authentication_error
+- test_api_response_parsing, test_api_response_validation
+- test_retry_logic, test_configurable_endpoint, test_configurable_timeout
+- test_request_logging, test_response_logging
+- test_secure_auth_storage, test_mock_mode
+- test_end_to_end_api_call, test_api_call_with_mock
+- test_api_call_with_rate_limit, test_api_fallback_integration
+- test_concurrent_requests, test_connection_pooling
+- test_api_version_compatibility
 
 ---
 
-### Original Test Suite (9 tests - ALL PASSING ✅)
+### System Prompt Engine (15 tests)
+**File to create**: `python/prompts.py` + `tests/unit/test_prompts.py` + `tests/integration/test_prompts_integration.py`
 
-**File**: `tests/test_phase3_mistral.py`
-
-**Purpose**: Validate Phase 3 core functionality before creating comprehensive unit tests.
-
-**Execution:**
-```bash
-python tests/test_phase3_mistral.py -v
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_prompts.py -v                # 12 unit tests
+python -m pytest tests/integration/test_prompts_integration.py -v  # 3 integration tests
 ```
 
-**Results:** ✅ **9/9 tests passing (100%)**
-
-| # | Test | Status | Description |
-|---|------|--------|-------------|
-| 1 | API Key Loading | ✅ PASS | .env file loading |
-| 2 | Mistral Client Import | ✅ PASS | Module import |
-| 3 | Prompts Engine Import | ✅ PASS | Module import |
-| 4 | Strategist Import | ✅ PASS | Module import |
-| 5 | Mistral API Connection | ✅ PASS | Real API connection |
-| 6 | Mistral Chat Completion | ✅ PASS | Real chat completion |
-| 7 | Prompt Generation | ✅ PASS | Prompt generation |
-| 8 | Strategist Initialization | ✅ PASS | Strategist lifecycle |
-| 9 | Orchestrator Integration | ✅ PASS | Integration working |
-
-**Dependencies**: Tests 5-6 require valid API key and internet connection
+**Tests to implement**:
+- test_prompt_generation_us, test_prompt_generation_wehrmacht
+- test_prompt_generation_british, test_prompt_generation_pe
+- test_fuel_cutoff_rules, test_counter_units_matrix
+- test_build_tree_rules, test_resource_constraints
+- test_prompt_validation, test_prompt_customization
+- test_prompt_update, test_default_prompt
+- test_prompt_in_strategic_cycle, test_prompt_faction_switching
+- test_prompt_error_handling
 
 ---
 
-### pytest Test Suite (100+ tests - STRUCTURALLY COMPLETE)
+### JSON Mode Integration (15 tests)
+**File to update**: `python/schema.py` + `tests/unit/test_json_mode.py` + `tests/integration/test_json_mode_integration.py`
 
-**Status**: ✅ **All test files created and structurally sound**
-**Current**: ~80% passing (80/100+ tests), ~20 tests need mock fixture adjustments
-
-#### Test Files Created
-
-| File | Tests | Type | Status |
-|------|-------|------|--------|
-| `tests/unit/test_mistral_client.py` | 21 | Unit | ⚠️ 8/21 passing |
-| `tests/unit/test_prompts.py` | 20+ | Unit | ✅ Ready |
-| `tests/unit/test_strategist.py` | 15+ | Unit | ✅ Ready |
-| `tests/unit/test_json_mode.py` | 10+ | Unit | ✅ Ready |
-| `tests/unit/test_history.py` | 15+ | Unit | ✅ Ready |
-| `tests/unit/test_rate_limiter.py` | 15+ | Unit | ✅ Ready |
-| `tests/integration/test_mistral_integration.py` | 4 | Integration | ✅ Ready |
-
-**Execution:**
-```bash
-# Run all Phase 3 pytest tests
-python -m pytest tests/unit/test_mistral_client.py tests/unit/test_prompts.py tests/unit/test_strategist.py tests/unit/test_json_mode.py tests/unit/test_history.py tests/unit/test_rate_limiter.py tests/integration/test_mistral_integration.py -v
-
-# Run with coverage
-python -m pytest tests/unit/ --cov=python --cov-report=term
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_json_mode.py -v                # 12 unit tests
+python -m pytest tests/integration/test_json_mode_integration.py -v  # 3 integration tests
 ```
 
-#### Test Coverage by Component
+**Tests to implement**:
+- test_intent_schema_definition, test_intent_schema_validation
+- test_intent_build_command, test_intent_capture_command
+- test_intent_attack_move_command, test_intent_set_posture_command
+- test_intent_produce_command, test_intent_retreat_command
+- test_mistral_json_mode_configuration
+- test_json_response_parsing, test_json_error_handling
+- test_json_schema_evolution
+- test_json_mode_end_to_end, test_json_mode_with_mock
+- test_json_schema_validation_in_pipeline
 
-**Mistral API Client (21 tests)**
-- ✅ Enum tests (2 tests)
-- ✅ Response tests (2 tests)
-- ✅ Error handling tests (2 tests)
-- ⚠️ API key loading tests (4 tests - fixtures need adjustment)
-- ⚠️ Initialization tests (3 tests - fixtures need adjustment)
-- ⚠️ Configuration tests (3 tests - fixtures need adjustment)
-- ⚠️ Headers tests (1 test - fixtures need adjustment)
-- ⚠️ Stats tests (2 tests - fixtures need adjustment)
-- ⚠️ Factory tests (2 tests - fixtures need adjustment)
+---
 
-**Prompt Engine (20+ tests)**
-- ✅ All enum tests (6 tests)
-- ✅ Configuration tests (2 tests)
-- ✅ Initialization tests (2 tests)
-- ✅ Generation tests (6 tests)
-- ✅ Knowledge tests (2 tests)
-- ✅ Resource tests (6 tests)
-- ✅ Factory tests (2 tests)
-- ✅ Formatting tests (2 tests)
+### Game History Manager (14 tests)
+**File to create**: `python/history.py` + `tests/unit/test_history.py` + `tests/integration/test_history_integration.py`
 
-**Strategist (15+ tests)**
-- ✅ Config tests (2 tests)
-- ✅ Stats tests (5 tests)
-- ✅ Intent tests (3 tests)
-- ✅ Enum tests (2 tests)
-- ✅ Mapping tests (2 tests)
-- ✅ Factory tests (2 tests)
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_history.py -v                    # 11 unit tests
+python -m pytest tests/integration/test_history_integration.py -v  # 3 integration tests
+```
 
-**JSON Mode (10+ tests)**
-- ✅ Configuration tests (3 tests)
-- ✅ Schema tests (4 tests)
-- ✅ Parsing tests (4 tests)
-- ✅ Validation tests (3 tests)
-- ✅ Prompts tests (2 tests)
+**Tests to implement**:
+- test_history_initialization, test_history_add_snapshot
+- test_history_max_depth, test_history_retrieval
+- test_history_get_last_n, test_history_clear
+- test_history_persistence, test_history_file_rotation
+- test_history_search, test_history_statistics
+- test_history_thread_safety
+- test_history_in_prompts, test_history_with_state_manager
+- test_history_persistence_and_reload
 
-**History Manager (15+ tests)**
-- ✅ Initialization tests (3 tests)
-- ✅ Add entry tests (3 tests)
-- ✅ Retrieval tests (4 tests)
-- ✅ Clear tests (2 tests)
-- ✅ Statistics tests (2 tests)
-- ✅ Structure tests (2 tests)
-- ✅ Game state tests (2 tests)
-- ✅ Thread safety tests (1 test)
-- ✅ Persistence tests (1 test)
+---
 
-**Rate Limiter (15+ tests)**
-- ✅ Initialization tests (3 tests)
-- ✅ Call checking tests (4 tests)
-- ✅ Recording tests (3 tests)
-- ✅ Stats tests (2 tests)
-- ✅ Call type tests (3 tests)
-- ✅ Budget tests (2 tests)
-- ✅ Time window tests (2 tests)
-- ✅ Notification tests (2 tests)
-- ✅ Factory tests (2 tests)
-- ✅ Strategist config tests (2 tests)
+### Cost/Rate Limiter (14 tests)
+**File to create**: `python/rate_limiter.py` + `tests/unit/test_rate_limiter.py` + `tests/integration/test_rate_limiter_integration.py`
 
-**Integration Tests (4 tests)**
-- ✅ API connection test (requires API key)
-- ✅ Chat completion test (requires API key)
-- ✅ Latency test (requires API key)
-- ✅ Sequential calls test (requires API key)
-- ✅ Prompt generation tests (4 tests)
-- ✅ Strategist integration tests (2 tests)
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_rate_limiter.py -v                # 11 unit tests
+python -m pytest tests/integration/test_rate_limiter_integration.py -v  # 3 integration tests
+```
+
+**Tests to implement**:
+- test_rate_limiter_initialization, test_rate_limiter_budget_tracking
+- test_rate_limiter_budget_exceeded, test_rate_limiter_urgent_calls
+- test_rate_limiter_reset, test_rate_limiter_time_window
+- test_rate_limiter_configurable_budget, test_rate_limiter_configurable_window
+- test_rate_limiter_statistics, test_rate_limiter_notification
+- test_rate_limiter_thread_safety
+- test_rate_limiter_in_strategic_cycle, test_rate_limiter_with_fallback
+- test_rate_limiter_persistence
+
+---
+
+### Orchestrator → Mistral Integration (10 tests)
+**File to create**: `python/orchestrator/strategist.py` + `tests/unit/test_strategist.py` + `tests/integration/test_strategic_cycle.py`
+
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_strategist.py -v                   # 0 unit tests (integration only)
+python -m pytest tests/integration/test_strategic_cycle.py -v     # 10 integration tests
+```
+
+**Tests to implement**:
+- test_strategic_cycle_complete, test_strategic_cycle_error_handling
+- test_strategic_cycle_latency
+- test_intent_validation_integration, test_intent_execution_integration
+- test_strategic_tick_integration, test_fallback_integration
+- test_game_state_in_prompts, test_history_in_prompts
+- test_difficulty_in_prompts
+
+---
+
+### Difficulty Doctrine Prompts (10 tests)
+**File to update**: `python/prompts.py` + update existing test files
+
+```python
+# Future execution commands:
+python -m pytest tests/unit/test_prompts.py::test_difficulty_* -v   # 8 unit tests
+python -m pytest tests/integration/test_prompts_integration.py::test_difficulty_* -v  # 2 integration tests
+```
+
+**Tests to implement**:
+- test_difficulty_levels, test_easy_difficulty_prompt
+- test_normal_difficulty_prompt, test_hard_difficulty_prompt
+- test_expert_difficulty_prompt
+- test_difficulty_prompt_differences, test_difficulty_configuration
+- test_difficulty_validation
+- test_difficulty_affects_behavior, test_difficulty_switching
+
+---
+
+### Phase 3 Performance Tests (3 tests)
+**File to create**: `tests/performance/test_strategic_latency.py`
+
+```python
+# Future execution commands:
+python -m pytest tests/performance/test_strategic_latency.py -v  # 3 tests
+```
+
+**Tests to implement**:
+- test_strategic_cycle_latency_under_load
+- test_concurrent_api_calls
+- test_rate_limiter_under_stress
 
 ---
 
 ### Phase 3 Summary
-
-**Total Tests**: 113+ (9 original + 100+ pytest + 4 integration)
-
-**Files Created**:
-- 3 Python modules: `mistral_client.py`, `prompts.py`, `strategist.py`
-- 7 test files: 6 unit + 1 integration
-- 1 test runner: `run_phase3_tests.py`
-
-**Status**:
-- ✅ **Core implementation complete**
-- ✅ **Original test suite: 9/9 passing (100%)**
-- ✅ **pytest suite: ~80% passing (80/100+ tests)**
-- ⚠️ **20 tests need mock fixture adjustments**
-
-**Next Steps**:
-1. Fix mock fixtures for API key loading tests
-2. Run full test suite and verify all tests pass
-3. Begin Phase 4 (Evaluation & Tuning)  
+**Total Tests**: 100 (19+15+15+14+14+10+10+3)  
+**Files to Create**: 7 Python modules + 7 test files  
+**Status**: ❌ Not Started  
 
 ```bash
-# Run Phase 3 tests (currently implemented)
-python tests/test_phase3_mistral.py -v
-
-# Future: Run all Phase 3 tests (once fully implemented)
-python -m pytest tests/unit/test_mistral_client.py tests/unit/test_prompts.py tests/unit/test_json_mode.py tests/integration/test_mistral_integration.py tests/integration/test_strategic_cycle.py tests/integration/test_prompts_integration.py tests/integration/test_json_mode_integration.py tests/performance/test_strategic_latency.py -v
+# Future: Run all Phase 3 tests (once implemented)
+python -m pytest tests/unit/test_mistral_client.py tests/unit/test_prompts.py tests/unit/test_json_mode.py tests/unit/test_history.py tests/unit/test_rate_limiter.py tests/integration/test_mistral_integration.py tests/integration/test_strategic_cycle.py tests/integration/test_prompts_integration.py tests/integration/test_json_mode_integration.py tests/integration/test_history_integration.py tests/integration/test_rate_limiter_integration.py tests/performance/test_strategic_latency.py -v
 ```
 
 ---
@@ -588,9 +584,6 @@ python -m pytest tests/unit/test_config.py tests/unit/test_ipc_reader.py tests/u
 
 # Phase 2 tests only
 python -m pytest tests/unit/test_command_executor.py tests/unit/test_validator.py tests/unit/test_safety_filter.py tests/unit/test_fallback.py tests/unit/test_reflex_layer.py tests/unit/test_orchestrator_main.py tests/integration/ -v
-
-# Phase 3 tests only
-python tests/test_phase3_mistral.py -v
 ```
 
 ## Future Execution (After Implementation)
@@ -619,39 +612,29 @@ python -m pytest tests/unit/test_config_ui.py tests/unit/test_packaging.py tests
 
 | Category | Count | Status | Commands |
 |----------|-------|--------|----------|
-| **Executable Tests** | 525+ | ✅ All Passing | `pytest tests/ -v` |
-| **Phase 0-2** | 416+ | ✅ All Passing | `pytest tests/ -v` |
-| **Phase 3 Original** | 9 | ✅ All Passing | `python tests/test_phase3_mistral.py -v` |
-| **Phase 3 pytest** | 100+ | ⚠️ ~80% Passing | `pytest tests/unit/test_* -v` |
-| **Tests to Implement** | 178 | ❌ Not Started | See above |
-| **Total Planned** | 703+ | ⚠️ 77% Complete | - |
+| **Executable Tests** | 416+ | ✅ All Passing | `pytest tests/ -v` |
+| **Tests to Implement** | 187 | ❌ Not Started | See above |
+| **Total Planned** | 603+ | ⚠️ 72% Complete | - |
 
 ## Implementation Checklist
 
 ### This Week (P0 - Critical)
-- [x] Run Phase 1 validation against real CoH1 data
-- [x] Create `python/mistral_client.py` + tests (21 tests created)
-- [x] Create `python/prompts.py` + tests (20+ tests created)
-- [x] Create `python/orchestrator/strategist.py` + integration
-- [x] **Verification**: `python tests/test_phase3_mistral.py -v` (9/9 tests passing)
-- [x] Convert Phase 3 tests to pytest format (100+ tests created)
-- [x] Create test runner script (`run_phase3_tests.py`)
-- [ ] Fix mock fixtures for API key loading tests (20 tests)
-- [ ] **Verification**: `pytest tests/unit/ -v` (target: 100% passing)
+- [ ] Run Phase 1 validation against real CoH1 data
+- [ ] Create `python/mistral_client.py` + tests (19 tests)
+- [ ] Create `python/prompts.py` + tests (15 tests)
+- [ ] **Verification**: `pytest tests/unit/test_mistral_client.py tests/unit/test_prompts.py -v`
 
 ### Next Week (P1 - High)
-- [x] Create `python/history.py` + tests (15+ tests created)
-- [x] Create `python/rate_limiter.py` + tests (15+ tests created)
-- [x] Create `python/schema.py` updates + JSON mode tests (10+ tests created)
-- [x] **Verification**: `pytest tests/unit/test_history.py tests/unit/test_rate_limiter.py tests/unit/test_json_mode.py -v`
+- [ ] Create `python/history.py` + tests (14 tests)
+- [ ] Create `python/rate_limiter.py` + tests (14 tests)
+- [ ] Create `python/schema.py` updates + JSON mode tests (15 tests)
+- [ ] **Verification**: `pytest tests/unit/test_history.py tests/unit/test_rate_limiter.py tests/unit/test_json_mode.py -v`
 
 ### Week 3 (P1 - High)
-- [x] Create `python/orchestrator/strategist.py` + tests (15+ tests created)
-- [x] Update `python/prompts.py` + difficulty tests (20+ tests created)
-- [x] **Verification**: `pytest tests/integration/test_strategic_cycle.py -v`
-- [x] **Milestone**: Phase 3 Core Complete (100+ tests)
-
-**Status**: ✅ **ALL COMPLETED**
+- [ ] Create `python/orchestrator/strategist.py` + tests (10 tests)
+- [ ] Update `python/prompts.py` + difficulty tests (10 tests)
+- [ ] **Verification**: `pytest tests/integration/test_strategic_cycle.py -v`
+- [ ] **Milestone**: Phase 3 Complete (100 tests)
 
 ### Week 4-5 (P2 - Medium)
 - [ ] Create Phase 4 modules + tests (63 tests)
@@ -674,17 +657,10 @@ python -m pytest tests/unit/test_config_ui.py tests/unit/test_packaging.py tests
 | Phase | Unit Tests | Integration Tests | Manual Tests | Total | Status |
 |-------|------------|-------------------|--------------|-------|--------|
 | Phase 0-2 | 452+ | 29+ | 7 | **488+** | ✅ Executable Now |
-| Phase 3 Original | 0 | 0 | 0 | **9** | ✅ All Passing |
-| Phase 3 pytest | 100+ | 4 | 0 | **104+** | ⚠️ ~80% Passing |
+| Phase 3 | 69 | 28 | 0 | **97** | ❌ To Implement |
 | Phase 4 | 38 | 23 | 0 | **61** | ❌ To Implement |
 | Phase 5 | 13 | 4 | 12 | **29** | ❌ To Implement |
-| **TOTAL** | **590+** | **56+** | **19** | **665+** | **~77% Complete** |
-
-**Phase 3 Breakdown:**
-- Original test suite: 9 tests (100% passing)
-- pytest unit tests: 100+ tests (~80% passing)
-- pytest integration tests: 4 tests (ready, require API key)
-- **Total Phase 3: 113+ tests**
+| **TOTAL** | **572+** | **84+** | **19** | **675+** | **72% Complete** |
 
 ## Command Summary
 
@@ -729,31 +705,15 @@ tests/
 └── performance/
     └── test_ipc_latency.py          # Phase 0
 
-# PHASE 3 FILES (IMPLEMENTED ✅):
-tests/
-├── test_phase3_mistral.py          # Phase 3 - 9 tests (ALL PASSING)
-├── run_phase3_tests.py             # Phase 3 - Test runner
-│
-├── unit/
-│   ├── test_mistral_client.py     # Phase 3 - 21 tests (~80% passing)
-│   ├── test_prompts.py            # Phase 3 - 20+ tests (ready)
-│   ├── test_strategist.py         # Phase 3 - 15+ tests (ready)
-│   ├── test_json_mode.py          # Phase 3 - 10+ tests (ready)
-│   ├── test_history.py            # Phase 3 - 15+ tests (ready)
-│   └── test_rate_limiter.py       # Phase 3 - 15+ tests (ready)
-│
-└── integration/
-    └── test_mistral_integration.py # Phase 3 - 4 tests (ready)
-
-python/
-├── mistral_client.py              # Phase 3 - Mistral API client
-├── prompts.py                     # Phase 3 - Prompt engine
-└── orchestrator/
-    └── strategist.py              # Phase 3 - Strategist integration
-
 # FILES TO CREATE (future):
 tests/
 ├── unit/
+│   ├── test_mistral_client.py     # Phase 3
+│   ├── test_prompts.py              # Phase 3
+│   ├── test_json_mode.py            # Phase 3
+│   ├── test_history.py              # Phase 3
+│   ├── test_rate_limiter.py         # Phase 3
+│   ├── test_strategist.py           # Phase 3
 │   ├── test_test_harness.py        # Phase 4
 │   ├── test_stats.py                # Phase 4
 │   ├── test_log_analyzer.py         # Phase 4
@@ -762,14 +722,22 @@ tests/
 │   └── test_packaging.py            # Phase 5
 │
 ├── integration/
+│   ├── test_mistral_integration.py # Phase 3
+│   ├── test_strategic_cycle.py     # Phase 3
+│   ├── test_prompts_integration.py  # Phase 3
+│   ├── test_json_mode_integration.py # Phase 3
+│   ├── test_history_integration.py # Phase 3
+│   ├── test_rate_limiter_integration.py # Phase 3
 │   ├── test_evaluation.py           # Phase 4
 │   ├── test_stats_integration.py   # Phase 4
 │   ├── test_log_analyzer_integration.py # Phase 4
 │   ├── test_regression_integration.py # Phase 4
 │   ├── test_baseline_evaluation.py  # Phase 4
-│   └── test_prompt_tuning.py        # Phase 4
+│   ├── test_prompt_tuning.py        # Phase 4
+│   └── test_final_verification.py   # Phase 5
 │
 └── performance/
+    ├── test_strategic_latency.py   # Phase 3
     └── test_batch_performance.py    # Phase 4
 ```
 
@@ -812,8 +780,6 @@ pytest tests/ -n 4 -v  # Uses 4 workers
 ## Documentation References
 
 - **PROTOTYPE_DEVELOPMENT_PLAN.md** - Full project plan
-- **TEST_PLAN.md** - Complete test plan (Phases 0-3)
-- **PHASE3_TEST_PLAN.md** - Phase 3 detailed test plan
 - **TESTS_TO_COMPLETE.md** - Detailed test specifications
 - **TESTING_GUIDE.md** - Testing standards and best practices
 - **EXECUTION_SHEET.md** - Execution checklists
@@ -823,13 +789,11 @@ pytest tests/ -n 4 -v  # Uses 4 workers
 ---
 
 **Document Status**: ✅ READY FOR EXECUTION  
-**Next Action**: Run `python tests/test_phase3_mistral.py -v` to verify Phase 3, then `pytest tests/ -v` for all tests  
+**Next Action**: Run `pytest tests/ -v` to verify current state  
 **Owner**: Developer Team  
-**Last Updated**: 2026-11-21
-**Phase 3 Status**: ✅ IMPLEMENTED - 9/9 original tests passing, 100+ pytest tests created
+**Last Updated**: 2026-10-25
 
 ---
 
 *Generated by Mistral Vibe - CoH1 × Mistral AI Mod*  
-*This is your actionable test execution list*  
-*Phase 3 Implementation: 2026-11-21 - Core complete, tests converted to pytest*
+*This is your actionable test execution list*

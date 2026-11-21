@@ -8,21 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
-- **Phase 3: Mistral Strategist Integration** - Complete Mistral AI integration for strategic decision-making
-  - `python/mistral_client.py` (868 lines) - Secure Mistral API client with environment variable key loading
-  - `python/prompts.py` (1122 lines) - System prompt engine with CoH1 domain knowledge (factions, difficulties, phases, unit counters, resource rules)
-  - `python/orchestrator/strategist.py` (970 lines) - Full strategic cycle integration (state → prompt → AI → intent → command → execution)
-  - `.env` - Secure API key storage (added to .gitignore)
-  - `PHASE3_TEST_PLAN.md` - Comprehensive Phase 3 test documentation
-  - `tests/test_phase3_mistral.py` - Original Phase 3 test suite (9 tests, all passing)
-  - `tests/unit/test_mistral_client.py` - Unit tests for Mistral client (21 tests)
-  - `tests/unit/test_prompts.py` - Unit tests for prompt engine (20+ tests)
-  - `tests/unit/test_strategist.py` - Unit tests for strategist (15+ tests)
-  - `tests/unit/test_json_mode.py` - Unit tests for JSON mode (10+ tests)
-  - `tests/unit/test_history.py` - Unit tests for history manager (15+ tests)
-  - `tests/unit/test_rate_limiter.py` - Unit tests for rate limiter (15+ tests)
-  - `tests/integration/test_mistral_integration.py` - Integration tests (4 tests)
-  - `tests/run_phase3_tests.py` - Comprehensive test runner script
 - **Complete Phase 0 Testing Plan** (`TEST_PLAN.md`) - Comprehensive testing plan expanded from Steps 1-2 to full Phase 0 validation
   - Added Tests 3-7: File I/O, IPC round-trip, Latency verification, Fallback IPC, Command execution
   - Added Critical Assumptions Tracking (A1-A6) with risk assessment and contingency plans
@@ -328,28 +313,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Prototype Development Plan** (`PROTOTYPE_DEVELOPMENT_PLAN.md`) - Added current status assessment
   - Updated development priorities and key findings
 - **Testing Guide** (`docs/TESTING_GUIDE.md`) - Documentation updates for Phase 1 and Phase 2 validation
-- **Test Plan** (`TEST_PLAN.md`) - Updated test plan for Phase 1 + Added complete Phase 3 testing plan
-- **Configuration** (`python/config.py`) - Added strategist configuration section
-  - Added `strategist.enabled`, `strategist.tick_interval`, `strategist.max_intents_per_cycle`
-  - Added `strategist.min_confidence`, `strategist.min_priority`, `strategist.include_history`
-  - Added `strategist.history_depth`, `strategist.fallback_on_error`, `strategist.fallback_on_rate_limit`
-  - Added `mistral.enabled` flag for Mistral integration control
-- **Orchestrator Main** (`python/orchestrator/main.py`) - Integrated strategist component
-  - Added strategist initialization and lifecycle management
-  - Integrated strategist with strategic scheduler (configurable interval)
-  - Added strategist to start/stop sequences
-  - Updated to use configuration from config file
+- **Test Plan** (`TEST_PLAN.md`) - Updated test plan for Phase 1
 - **Test Updates** - Updated test files for consistency with new configuration:
   - `tests/unit/test_config.py`
   - `tests/unit/test_fallback.py`
   - `tests/unit/test_reflex_layer.py`
   - `tests/integration/test_reflex_integration.py`
   - `tests/integration/test_phase2_fallback.py` - Added type ignore annotation for missing imports
-  - `tests/unit/test_history.py` - Updated with pytest compatibility and Phase 3 test patterns
-  - `tests/unit/test_rate_limiter.py` - Updated with pytest compatibility and Phase 3 test patterns
-  - **Documentation Updates** - Major documentation overhaul for Phase 3
-    - `TEST_PLAN.md` - Added comprehensive Phase 3 testing plan (~200 lines)
-    - `TESTS_EXECUTION_LIST.md` - Updated with all Phase 3 tests and current status
 
 ### Fixed
 - **Command Creation Bug** (`python/orchestrator/main.py`) - Fixed missing `engineer_id` parameter in `create_build_command()` call for test mode
