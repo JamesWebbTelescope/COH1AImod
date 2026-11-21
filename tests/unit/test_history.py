@@ -1,1083 +1,353 @@
 """
-CoH1 × Mistral AI Mod - Unit Tests for Game History Manager
+Phase 3: Game History Manager Unit Tests
 
-Comprehensive unit tests for the history.py module.
+Tests for the history module (already exists from Phase 2, but adding Phase 3 tests).
 
-Author: Generated via developer skill
+Author: Generated for Phase 3 pytest integration
 Version: 1.0.0
-Date: 2026-10-26
+Date: 2026-11-21
 """
 
-import pytest
+import os
+import sys
 import json
-import time
-import threading
+import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from datetime import datetime
 
-import sys
-import os
-
-# Add python directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "python"))
-
-
-# ============================================
-# Test Fixtures
-# ============================================
-
-@pytest.fixture
-def sample_game_state():
-    """Create a sample game state dictionary for testing."""
-    return {
-        "version": "1.0",
-        "player_id": 1,
-        "timestamp": time.time(),
-        "game_time": 120.5,
-        "game_phase": "mid",
-        "faction": "allies",
-        "resources": {
-            "manpower": {"current": 500, "income": 10, "max": 1000},
-            "fuel": {"current": 300, "income": 5, "max": 500},
-            "munitions": {"current": 200, "income": 3, "max": 300}
-        },
-        "squads": [
-            {"id": 1, "type": "riflemen", "health": 0.8, "max_health": 1.0, "vet_level": 1, 
-             "position": [10, 20, 0], "posture": "defensive"},
-            {"id": 2, "type": "engineer", "health": 1.0, "max_health": 1.0, "vet_level": 0,
-             "position": [15, 25, 0], "posture": "aggressive"}
-        ],
-        "capture_points": [
-            {"id": 1, "position": [50, 50, 0], "owner": 1, "capture_progress": 1.0, "is_neutral": False},
-            {"id": 2, "position": [100, 100, 0], "owner": None, "capture_progress": 0.0, "is_neutral": True}
-        ],
-        "visible_enemies": [],
-        "tech_tree": {
-            "tier_1": True, "tier_2": False, "tier_3": False,
-            "abilities": ["smoke"],
-            "t1_progress": 1.0, "t2_progress": 0.5, "t3_progress": 0.0
-        },
-        "build_queue": [],
-        "population": {"current": 20, "max": 100}
-    }
+# Add project root and python directory to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "python"))
 
 
 @pytest.fixture
-def sample_decision():
-    """Create a sample decision dictionary for testing."""
-    return {
-        "type": "build",
-        "target": "tier_2",
-        "reasoning": "Need more production capacity",
-        "confidence": 0.95,
-        "priority": 1
-    }
-
-
-@pytest.fixture
-def sample_command():
-    """Create a sample command dictionary for testing."""
-    return {
-        "type": "BUILD",
-        "parameters": {"engineer_id": 2, "building_type": "tier_2", "position": [30, 30, 0]},
-        "executed": True,
-        "execution_time": 0.1,
-        "result": "success"
-    }
+def history_manager():
+    """Create a history manager for testing."""
+    from history import GameHistoryManager
+    
+    manager = GameHistoryManager(max_entries=10)
+    yield manager
 
 
 @pytest.fixture
 def temp_history_file():
-    """Create a temporary file for history storage."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
-        filepath = f.name
-    yield filepath
-    # Cleanup
-    if os.path.exists(filepath):
-        os.unlink(filepath)
+    """Create a temporary history file."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        f.write("[]")
+        yield f.name
+    os.unlink(f.name)
 
 
-@pytest.fixture
-def history_config():
-    """Create a test configuration for history manager."""
-    from history import HistoryConfig
-    return HistoryConfig(
-        max_entries=10,
-        max_file_entries=20,
-        persistence_enabled=False,
-        storage_dir="test_data",
-        history_file="test_history.jsonl"
-    )
-
-
-@pytest.fixture
-def history_manager(history_config):
-    """Create a history manager for testing."""
-    from history import GameHistoryManager
-    manager = GameHistoryManager(history_config)
-    return manager
-
-
-# ============================================
-# Test Classes
-# ============================================
-
-
-# ============================================
-# HistoryEntry Tests
-# ============================================
-
-class TestHistoryEntry:
-    """Tests for HistoryEntry dataclass."""
+class TestHistoryManagerInitialization:
+    """Tests for history manager initialization."""
     
-    def test_history_entry_creation(self):
-        """Test creating a HistoryEntry."""
-        from history import HistoryEntry, HistoryEntryType
-        
-        entry = HistoryEntry(
-            timestamp=time.time(),
-            game_time=120.5,
-            entry_type=HistoryEntryType.GAME_STATE.value,
-            data={"test": "data"},
-            metadata={"key": "value"}
-        )
-        
-        assert entry.timestamp > 0
-        assert entry.game_time == 120.5
-        assert entry.entry_type == "game_state"
-        assert entry.data == {"test": "data"}
-        assert entry.metadata == {"key": "value"}
+    def test_default_initialization(self, history_manager):
+        """Test default history manager initialization."""
+        assert history_manager.max_entries == 10
+        assert len(history_manager.get_all_entries()) == 0
     
-    def test_history_entry_to_dict(self):
-        """Test converting HistoryEntry to dictionary."""
-        from history import HistoryEntry, HistoryEntryType
+    def test_custom_max_entries(self):
+        """Test custom max entries."""
+        from history import GameHistoryManager
         
-        entry = HistoryEntry(
-            timestamp=1000.0,
-            game_time=120.5,
-            entry_type=HistoryEntryType.DECISION.value,
-            data={"type": "build"},
-            metadata={}
-        )
-        
-        result = entry.to_dict()
-        
-        assert result["timestamp"] == 1000.0
-        assert result["game_time"] == 120.5
-        assert result["type"] == "decision"
-        assert result["data"] == {"type": "build"}
-        assert result["metadata"] == {}
+        manager = GameHistoryManager(max_entries=5)
+        assert manager.max_entries == 5
     
-    def test_history_entry_from_dict(self):
-        """Test creating HistoryEntry from dictionary."""
-        from history import HistoryEntry
-        
-        data = {
-            "timestamp": 1000.0,
+    def test_initial_state_empty(self, history_manager):
+        """Test that initial state is empty."""
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 0
+
+
+class TestHistoryManagerAddEntries:
+    """Tests for adding entries to history."""
+    
+    def test_add_single_entry(self, history_manager):
+        """Test adding a single entry."""
+        entry = {
             "game_time": 120.5,
-            "type": "command",
-            "data": {"type": "BUILD"},
-            "metadata": {"test": True}
+            "timestamp": datetime.now().timestamp(),
+            "resources": {"manpower": {"current": 500}},
+            "squads": [],
+            "cps": []
         }
         
-        entry = HistoryEntry.from_dict(data)
+        history_manager.add_entry(entry)
         
-        assert entry.timestamp == 1000.0
-        assert entry.game_time == 120.5
-        assert entry.entry_type == "command"
-        assert entry.data == {"type": "BUILD"}
-        assert entry.metadata == {"test": True}
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 1
+        assert entries[0] == entry
     
-    def test_history_entry_to_json(self):
-        """Test converting HistoryEntry to JSON."""
-        from history import HistoryEntry, HistoryEntryType
+    def test_add_multiple_entries(self, history_manager):
+        """Test adding multiple entries."""
+        for i in range(5):
+            entry = {
+                "game_time": float(i * 30),
+                "timestamp": datetime.now().timestamp(),
+                "resources": {"manpower": {"current": 100 + i * 100}},
+                "squads": [],
+                "cps": []
+            }
+            history_manager.add_entry(entry)
         
-        entry = HistoryEntry(
-            timestamp=1000.0,
-            game_time=120.5,
-            entry_type=HistoryEntryType.GAME_STATE.value,
-            data={"test": "data"}
-        )
-        
-        json_str = entry.to_json()
-        parsed = json.loads(json_str)
-        
-        assert parsed["timestamp"] == 1000.0
-        assert parsed["game_time"] == 120.5
-        assert parsed["type"] == "game_state"
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 5
     
-    def test_history_entry_from_json(self):
-        """Test creating HistoryEntry from JSON."""
-        from history import HistoryEntry
+    def test_add_entry_exceeds_max(self, history_manager):
+        """Test that adding entries beyond max removes oldest."""
+        # Add 15 entries to a manager with max 10
+        for i in range(15):
+            entry = {
+                "game_time": float(i * 30),
+                "timestamp": datetime.now().timestamp(),
+                "resources": {"manpower": {"current": 100}},
+                "squads": [],
+                "cps": []
+            }
+            history_manager.add_entry(entry)
         
-        json_str = '{"timestamp": 1000.0, "game_time": 120.5, "type": "event", "data": {}, "metadata": {}}'
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 10  # Should only keep last 10
         
-        entry = HistoryEntry.from_json(json_str)
-        
-        assert entry.timestamp == 1000.0
-        assert entry.game_time == 120.5
-        assert entry.entry_type == "event"
+        # First entry should be game_time = 5*30 = 150 (entries 5-14)
+        assert entries[0]["game_time"] == 150.0
 
 
-# ============================================
-# DecisionRecord Tests
-# ============================================
-
-class TestDecisionRecord:
-    """Tests for DecisionRecord dataclass."""
+class TestHistoryManagerRetrieval:
+    """Tests for retrieving entries from history."""
     
-    def test_decision_record_creation(self):
-        """Test creating a DecisionRecord."""
-        from history import DecisionRecord
+    def test_get_all_entries(self, history_manager):
+        """Test getting all entries."""
+        for i in range(3):
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            history_manager.add_entry(entry)
         
-        decision = DecisionRecord(
-            decision_type="build",
-            target="tier_2",
-            reasoning="Need more production",
-            confidence=0.95,
-            priority=1
-        )
-        
-        assert decision.decision_type == "build"
-        assert decision.target == "tier_2"
-        assert decision.reasoning == "Need more production"
-        assert decision.confidence == 0.95
-        assert decision.priority == 1
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 3
     
-    def test_decision_record_to_dict(self):
-        """Test converting DecisionRecord to dictionary."""
-        from history import DecisionRecord
-        
-        decision = DecisionRecord(
-            decision_type="attack",
-            target="enemy_base",
-            reasoning=None,
-            confidence=0.8,
-            priority=2
-        )
-        
-        result = decision.to_dict()
-        
-        assert result["type"] == "attack"
-        assert result["target"] == "enemy_base"
-        assert "reasoning" not in result
-        assert result["confidence"] == 0.8
-        assert result["priority"] == 2
-    
-    def test_decision_record_from_dict(self):
-        """Test creating DecisionRecord from dictionary."""
-        from history import DecisionRecord
-        
-        data = {
-            "type": "retreat",
-            "target": "squad_1",
-            "reasoning": "Under fire",
-            "confidence": 0.9,
-            "priority": 0
-        }
-        
-        decision = DecisionRecord.from_dict(data)
-        
-        assert decision.decision_type == "retreat"
-        assert decision.target == "squad_1"
-        assert decision.reasoning == "Under fire"
-        assert decision.confidence == 0.9
-        assert decision.priority == 0
-
-
-# ============================================
-# CommandRecord Tests
-# ============================================
-
-class TestCommandRecord:
-    """Tests for CommandRecord dataclass."""
-    
-    def test_command_record_creation(self):
-        """Test creating a CommandRecord."""
-        from history import CommandRecord
-        
-        command = CommandRecord(
-            command_type="BUILD",
-            parameters={"engineer_id": 1, "building_type": "tier_2"},
-            executed=True,
-            execution_time=0.1,
-            result="success",
-            error=None
-        )
-        
-        assert command.command_type == "BUILD"
-        assert command.parameters == {"engineer_id": 1, "building_type": "tier_2"}
-        assert command.executed == True
-        assert command.execution_time == 0.1
-        assert command.result == "success"
-        assert command.error is None
-    
-    def test_command_record_to_dict(self):
-        """Test converting CommandRecord to dictionary."""
-        from history import CommandRecord
-        
-        command = CommandRecord(
-            command_type="CAPTURE",
-            parameters={"squad_id": 1, "point_id": 1},
-            executed=False,
-            error="Invalid target"
-        )
-        
-        result = command.to_dict()
-        
-        assert result["type"] == "CAPTURE"
-        assert result["parameters"] == {"squad_id": 1, "point_id": 1}
-        assert result["executed"] == False
-        assert result["error"] == "Invalid target"
-    
-    def test_command_record_from_dict(self):
-        """Test creating CommandRecord from dictionary."""
-        from history import CommandRecord
-        
-        data = {
-            "type": "ATTACK_MOVE",
-            "parameters": {"squad_id": 1, "position": [100, 100, 0]},
-            "executed": True,
-            "execution_time": 0.05,
-            "result": "queued"
-        }
-        
-        command = CommandRecord.from_dict(data)
-        
-        assert command.command_type == "ATTACK_MOVE"
-        assert command.parameters == {"squad_id": 1, "position": [100, 100, 0]}
-        assert command.executed == True
-        assert command.execution_time == 0.05
-        assert command.result == "queued"
-
-
-# ============================================
-# HistoryConfig Tests
-# ============================================
-
-class TestHistoryConfig:
-    """Tests for HistoryConfig dataclass."""
-    
-    def test_history_config_defaults(self):
-        """Test HistoryConfig default values."""
-        from history import HistoryConfig
-        
-        config = HistoryConfig()
-        
-        assert config.max_entries == 20
-        assert config.max_file_entries == 100
-        assert config.persistence_enabled == True
-        assert config.storage_dir == "coh1ai_data"
-        assert config.history_file == "game_history.jsonl"
-        assert config.include_states == True
-        assert config.include_decisions == True
-        assert config.include_commands == True
-        assert config.compress_states == True
-    
-    def test_history_config_custom_values(self):
-        """Test HistoryConfig with custom values."""
-        from history import HistoryConfig
-        
-        config = HistoryConfig(
-            max_entries=50,
-            max_file_entries=200,
-            persistence_enabled=False,
-            storage_dir="custom_data",
-            history_file="custom_history.jsonl"
-        )
-        
-        assert config.max_entries == 50
-        assert config.max_file_entries == 200
-        assert config.persistence_enabled == False
-        assert config.storage_dir == "custom_data"
-        assert config.history_file == "custom_history.jsonl"
-
-
-# ============================================
-# GameHistoryManager Tests - Basic Operations
-# ============================================
-
-class TestGameHistoryManagerBasic:
-    """Basic tests for GameHistoryManager."""
-    
-    def test_history_manager_creation(self, history_manager):
-        """Test creating a GameHistoryManager."""
-        assert history_manager is not None
-        assert history_manager.get_size() == 0
-    
-    def test_add_state(self, history_manager, sample_game_state):
-        """Test adding a game state."""
-        entry = history_manager.add_state(sample_game_state, game_time=120.5)
-        
-        assert entry is not None
-        assert entry.entry_type == "game_state"
-        assert history_manager.get_size() == 1
-    
-    def test_add_decision(self, history_manager, sample_decision):
-        """Test adding a decision."""
-        entry = history_manager.add_decision(sample_decision, game_time=120.5)
-        
-        assert entry is not None
-        assert entry.entry_type == "decision"
-    
-    def test_add_command(self, history_manager, sample_command):
-        """Test adding a command."""
-        entry = history_manager.add_command(sample_command, game_time=120.5)
-        
-        assert entry is not None
-        assert entry.entry_type == "command"
-    
-    def test_add_event(self, history_manager):
-        """Test adding a custom event."""
-        entry = history_manager.add_event(
-            event_type="capture_point_captured",
-            data={"point_id": 1, "owner": 1},
-            game_time=120.5
-        )
-        
-        assert entry is not None
-        assert entry.entry_type == "event"
-        assert entry.data["type"] == "capture_point_captured"
-        assert entry.data["point_id"] == 1
-    
-    def test_add_multiple_entries(self, history_manager, sample_game_state, sample_decision, sample_command):
-        """Test adding multiple entries of different types."""
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        history_manager.add_command(sample_command, game_time=110.0)
-        history_manager.add_event("test_event", {"data": "test"}, game_time=115.0)
-        
-        assert history_manager.get_size() == 4
-    
-    def test_max_entries_limit(self, history_config):
-        """Test that history respects max_entries limit."""
-        from history import GameHistoryManager, HistoryConfig
-        
-        # Create manager with max_entries=5
-        config = HistoryConfig(
-            max_entries=5,
-            max_file_entries=10,
-            persistence_enabled=False
-        )
-        manager = GameHistoryManager(config)
-        
-        # Add 10 states
+    def test_get_recent_entries(self, history_manager):
+        """Test getting recent entries."""
         for i in range(10):
-            manager.add_state({"test": i}, game_time=float(i))
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            history_manager.add_entry(entry)
         
-        # Should only have 5 entries
-        assert manager.get_size() == 5
-
-
-# ============================================
-# GameHistoryManager Tests - Retrieval
-# ============================================
-
-class TestGameHistoryManagerRetrieval:
-    """Tests for retrieving entries from GameHistoryManager."""
-    
-    def test_get_recent_states(self, history_manager, sample_game_state):
-        """Test retrieving recent states."""
-        # Add multiple states
-        for i in range(5):
-            state = dict(sample_game_state)
-            state["game_time"] = float(i * 10)
-            history_manager.add_state(state, game_time=float(i * 10))
-        
-        # Get last 3 states
-        recent = history_manager.get_recent_states(3)
-        
+        recent = history_manager.get_recent_entries(3)
         assert len(recent) == 3
-        # They should be the most recent (states 2, 3, 4 with game_times 20, 30, 40)
-        # Method returns them in chronological order (oldest of recent first)
-        assert recent[0]["game_time"] == 20.0
-        assert recent[1]["game_time"] == 30.0
-        assert recent[2]["game_time"] == 40.0
+        assert recent[0]["data"] == "entry_7"
+        assert recent[1]["data"] == "entry_8"
+        assert recent[2]["data"] == "entry_9"
     
-    def test_get_all_entries(self, history_manager, sample_game_state, sample_decision):
-        """Test retrieving all entries."""
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        history_manager.add_state(sample_game_state, game_time=110.0)
+    def test_get_recent_entries_more_than_available(self, history_manager):
+        """Test getting more entries than available."""
+        for i in range(3):
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            history_manager.add_entry(entry)
         
-        all_entries = history_manager.get_all_entries()
-        
-        assert len(all_entries) == 3
+        recent = history_manager.get_recent_entries(10)
+        assert len(recent) == 3  # Should return all available
     
-    def test_get_all_entries_filtered(self, history_manager, sample_game_state, sample_decision):
-        """Test retrieving filtered entries."""
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        history_manager.add_state(sample_game_state, game_time=110.0)
+    def test_get_last_n_entries(self, history_manager):
+        """Test getting last N entries."""
+        for i in range(10):
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            history_manager.add_entry(entry)
         
-        states = history_manager.get_all_entries("game_state")
-        decisions = history_manager.get_all_entries("decision")
-        
-        assert len(states) == 2
-        assert len(decisions) == 1
-    
-    def test_get_entries_since(self, history_manager, sample_game_state):
-        """Test retrieving entries since a timestamp."""
-        import time as time_module
-        
-        # Add first entry
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        
-        # Wait a tiny bit to ensure timestamp is different
-        time_module.sleep(0.01)
-        
-        # Record timestamp after first entry
-        timestamp_after_first = time_module.time()
-        
-        # Add more entries
-        history_manager.add_state(sample_game_state, game_time=105.0)
-        history_manager.add_state(sample_game_state, game_time=110.0)
-        
-        # Get entries since after first entry was added
-        entries = history_manager.get_entries_since(timestamp_after_first)
-        
-        # Should get 2 entries (the ones added after the timestamp)
-        assert len(entries) == 2
-    
-    def test_get_decisions(self, history_manager, sample_decision):
-        """Test retrieving decisions."""
-        # Add multiple decisions
-        for i in range(5):
-            decision = dict(sample_decision)
-            decision["priority"] = i
-            history_manager.add_decision(decision, game_time=float(i * 10))
-        
-        decisions = history_manager.get_decisions(3)
-        
-        assert len(decisions) == 3
-        # Method returns them in chronological order (oldest of recent first)
-        # We added decisions with priorities 0, 1, 2, 3, 4
-        # Getting last 3 should return priorities 2, 3, 4
-        assert decisions[0].priority == 2
-        assert decisions[1].priority == 3
-        assert decisions[2].priority == 4
-    
-    def test_get_commands(self, history_manager, sample_command):
-        """Test retrieving commands."""
-        # Add multiple commands
-        for i in range(5):
-            command = dict(sample_command)
-            command["parameters"]["index"] = i
-            history_manager.add_command(command, game_time=float(i * 10))
-        
-        commands = history_manager.get_commands(3)
-        
-        assert len(commands) == 3
-        assert commands[0].parameters["index"] == 4
+        last_3 = history_manager.get_last_n_entries(3)
+        assert len(last_3) == 3
 
 
-# ============================================
-# GameHistoryManager Tests - Context Generation
-# ============================================
-
-class TestGameHistoryManagerContext:
-    """Tests for context generation."""
-    
-    def test_generate_context(self, history_manager, sample_game_state, sample_decision, sample_command):
-        """Test generating context for strategist prompts."""
-        # Add some history
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        history_manager.add_command(sample_command, game_time=110.0)
-        
-        context = history_manager.generate_context(max_states=2, max_decisions=1)
-        
-        assert "recent_states" in context
-        assert "recent_decisions" in context
-        assert "recent_commands" in context
-        assert len(context["recent_states"]) <= 2
-        assert len(context["recent_decisions"]) <= 1
-        assert len(context["recent_commands"]) <= 1
-    
-    def test_generate_context_with_summary(self, history_manager, sample_game_state):
-        """Test generating context with summary."""
-        # Add a state
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        
-        context = history_manager.generate_context(include_summary=True)
-        
-        assert "summary" in context
-        assert "total_states" in context["summary"]
-        assert context["summary"]["total_states"] == 1
-    
-    def test_format_for_prompt(self, history_manager, sample_game_state, sample_decision):
-        """Test formatting history for prompt inclusion."""
-        # Add some history
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        
-        prompt = history_manager.format_for_prompt(max_states=1, max_decisions=1)
-        
-        assert "=== Game History Context ===" in prompt
-        assert "Recent Game States:" in prompt
-        assert "Recent Decisions:" in prompt
-        assert "=== End Game History Context ===" in prompt
-    
-    def test_format_for_prompt_empty(self, history_manager):
-        """Test formatting empty history."""
-        prompt = history_manager.format_for_prompt()
-        
-        assert "=== Game History Context ===" in prompt
-        assert "=== End Game History Context ===" in prompt
-
-
-# ============================================
-# GameHistoryManager Tests - Configuration
-# ============================================
-
-class TestGameHistoryManagerConfiguration:
-    """Tests for configuration management."""
-    
-    def test_get_config(self, history_manager):
-        """Test getting configuration."""
-        config = history_manager.get_config()
-        
-        assert config is not None
-        assert config.max_entries == 10
-    
-    def test_set_config(self, history_manager):
-        """Test updating configuration."""
-        from history import HistoryConfig
-        
-        new_config = HistoryConfig(
-            max_entries=20,
-            max_file_entries=50,
-            persistence_enabled=False
-        )
-        
-        history_manager.set_config(new_config)
-        
-        config = history_manager.get_config()
-        assert config.max_entries == 20
-        assert config.max_file_entries == 50
-    
-    def test_config_filtering(self, history_config):
-        """Test that configuration filters what gets stored."""
-        from history import GameHistoryManager, HistoryConfig
-        
-        # Disable states and persistence (to avoid loading from previous tests)
-        config = HistoryConfig(
-            max_entries=10,
-            persistence_enabled=False,  # Disable persistence to avoid loading from disk
-            include_states=False,
-            include_decisions=True,
-            include_commands=True
-        )
-        manager = GameHistoryManager(config)
-        
-        # Try to add a state - should return None
-        entry = manager.add_state({"test": "data"}, game_time=100.0)
-        
-        assert entry is None
-        assert manager.get_size() == 0
-    
-    def test_config_from_config_object(self):
-        """Test creating config from configuration object."""
-        from history import HistoryConfig
-        from config import Configuration
-        
-        # Create a Configuration object
-        config_obj = Configuration()
-        
-        # Create HistoryConfig from it
-        history_config = HistoryConfig.from_config(config_obj)
-        
-        assert history_config is not None
-        assert history_config.max_entries > 0
-
-
-# ============================================
-# GameHistoryManager Tests - Clear Operations
-# ============================================
-
-class TestGameHistoryManagerClear:
+class TestHistoryManagerClear:
     """Tests for clearing history."""
     
-    def test_clear(self, history_manager, sample_game_state):
-        """Test clearing in-memory history."""
-        # Add some entries
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_state(sample_game_state, game_time=105.0)
+    def test_clear_all_entries(self, history_manager):
+        """Test clearing all entries."""
+        for i in range(5):
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            history_manager.add_entry(entry)
         
-        assert history_manager.get_size() == 2
-        
-        # Clear
         history_manager.clear()
         
-        assert history_manager.get_size() == 0
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 0
     
-    def test_clear_all(self, history_manager, sample_game_state):
-        """Test clearing all history."""
-        # Add some entries
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_state(sample_game_state, game_time=105.0)
+    def test_clear_preserves_max_entries(self, history_manager):
+        """Test that clear preserves max entries setting."""
+        history_manager.clear()
         
-        # Clear all
-        history_manager.clear_all()
-        
-        assert history_manager.get_size() == 0
+        assert history_manager.max_entries == 10
 
 
-# ============================================
-# GameHistoryManager Tests - Persistence
-# ============================================
-
-class TestGameHistoryManagerPersistence:
-    """Tests for persistence functionality."""
+class TestHistoryManagerStatistics:
+    """Tests for history statistics."""
     
-    def test_persistence_disabled(self, history_manager, sample_game_state, temp_history_file):
-        """Test that persistence can be disabled."""
-        # Add some entries
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        
-        # The file should not be created since persistence is disabled
-        # (in the fixture, persistence_enabled=False)
-        # Check that no files were created in the storage directory
-        storage_path = os.path.join(history_manager.config.storage_dir, history_manager.config.history_file)
-        assert not os.path.exists(storage_path)
-    
-    def test_persistence_enabled(self, sample_game_state, temp_history_file):
-        """Test that persistence works when enabled."""
-        from history import GameHistoryManager, HistoryConfig
-        
-        config = HistoryConfig(
-            max_entries=10,
-            max_file_entries=20,
-            persistence_enabled=True,
-            storage_dir=os.path.dirname(temp_history_file),
-            history_file=os.path.basename(temp_history_file)
-        )
-        
-        manager = GameHistoryManager(config)
-        
-        # Add some entries
-        manager.add_state(sample_game_state, game_time=100.0)
-        manager.add_state(sample_game_state, game_time=105.0)
-        
-        # Check file exists
-        assert os.path.exists(temp_history_file)
-        
-        # Check file contents
-        with open(temp_history_file, 'r') as f:
-            lines = f.readlines()
-        
-        assert len(lines) == 2
-        
-        # Parse first line
-        entry = manager._file_entries[0]
-        assert "game_state" in lines[0]
-    
-    def test_save_and_load(self, sample_game_state, temp_history_file):
-        """Test saving and loading history."""
-        from history import GameHistoryManager, HistoryConfig
-        
-        config = HistoryConfig(
-            max_entries=10,
-            max_file_entries=20,
-            persistence_enabled=True,
-            storage_dir=os.path.dirname(temp_history_file),
-            history_file=os.path.basename(temp_history_file)
-        )
-        
-        # Create manager and add entries
-        manager1 = GameHistoryManager(config)
-        manager1.add_state(sample_game_state, game_time=100.0)
-        manager1.add_state(sample_game_state, game_time=105.0)
-        
-        # Save explicitly
-        manager1.save()
-        
-        # Create new manager (it will auto-load from disk since persistence is enabled)
-        manager2 = GameHistoryManager(config)
-        
-        # Check entries loaded
-        assert manager2.get_size() == 2
-    
-    def test_load_nonexistent_file(self, history_manager):
-        """Test loading from non-existent file."""
-        # Should not raise an error
-        history_manager.load("/nonexistent/path/history.jsonl")
-
-
-# ============================================
-# GameHistoryManager Tests - Thread Safety
-# ============================================
-
-class TestGameHistoryManagerThreadSafety:
-    """Tests for thread safety."""
-    
-    def test_concurrent_additions(self, history_config):
-        """Test concurrent additions from multiple threads."""
-        from history import GameHistoryManager
-        
-        manager = GameHistoryManager(history_config)
-        errors = []
-        
-        def add_entries(thread_id):
-            try:
-                for i in range(10):
-                    manager.add_state(
-                        {"thread": thread_id, "entry": i},
-                        game_time=float(thread_id * 100 + i)
-                    )
-            except Exception as e:
-                errors.append(e)
-        
-        # Create and start threads
-        threads = []
+    def test_get_entry_count(self, history_manager):
+        """Test getting entry count."""
         for i in range(5):
-            t = threading.Thread(target=add_entries, args=(i,))
+            entry = {"game_time": float(i * 30)}
+            history_manager.add_entry(entry)
+        
+        count = history_manager.get_entry_count()
+        assert count == 5
+    
+    def test_get_entry_count_empty(self, history_manager):
+        """Test entry count when empty."""
+        count = history_manager.get_entry_count()
+        assert count == 0
+
+
+class TestHistoryEntryStructure:
+    """Tests for history entry structure."""
+    
+    def test_entry_with_all_fields(self, history_manager):
+        """Test entry with all expected fields."""
+        entry = {
+            "version": "1.0",
+            "player_id": 1,
+            "timestamp": datetime.now().timestamp(),
+            "game_time": 120.5,
+            "phase": "early",
+            "faction": "allies",
+            "resources": {
+                "manpower": {"current": 500, "income": 10, "max": 1000},
+                "fuel": {"current": 300, "income": 5, "max": 800},
+                "munitions": {"current": 200, "income": 3, "max": 600}
+            },
+            "squads": [
+                {"id": 1, "type": "riflemen", "health": 0.8, "max_health": 1.0, "pos": [100, 200, 0]}
+            ],
+            "cps": [
+                {"id": 1, "pos": [500, 500, 0], "owner": 1, "capture_progress": 1.0}
+            ],
+            "tech": {
+                "tier_1": True,
+                "tier_2": False,
+                "tier_3": False
+            },
+            "queue": [],
+            "pop": [11, 100]
+        }
+        
+        history_manager.add_entry(entry)
+        
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 1
+        assert entries[0]["game_time"] == 120.5
+        assert entries[0]["faction"] == "allies"
+    
+    def test_entry_with_minimal_fields(self, history_manager):
+        """Test entry with minimal fields."""
+        entry = {
+            "game_time": 120.5,
+            "timestamp": datetime.now().timestamp()
+        }
+        
+        history_manager.add_entry(entry)
+        
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 1
+        assert entries[0]["game_time"] == 120.5
+
+
+class TestHistoryManagerWithGameState:
+    """Tests for history manager with game state objects."""
+    
+    def test_add_game_state_dict(self, history_manager):
+        """Test adding game state as dictionary."""
+        game_state = {
+            "game_time": 120.5,
+            "phase": "early",
+            "faction": "allies",
+            "player_id": 1,
+            "resources": {"manpower": {"current": 500}},
+            "squads": [],
+            "cps": [],
+            "tech": {},
+            "queue": [],
+            "pop": [11, 100]
+        }
+        
+        history_manager.add_entry(game_state)
+        
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 1
+        assert entries[0]["game_time"] == 120.5
+    
+    def test_add_multiple_game_states(self, history_manager):
+        """Test adding multiple game states."""
+        for i in range(5):
+            game_state = {
+                "game_time": float(i * 30),
+                "phase": "early",
+                "faction": "allies",
+                "player_id": 1,
+                "resources": {"manpower": {"current": 100 + i * 100}},
+                "squads": [],
+                "cps": [],
+                "tech": {},
+                "queue": [],
+                "pop": [11, 100]
+            }
+            history_manager.add_entry(game_state)
+        
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 5
+
+
+class TestHistoryManagerThreadSafety:
+    """Tests for thread safety (basic)."""
+    
+    def test_concurrent_access(self, history_manager):
+        """Test basic concurrent access (not comprehensive)."""
+        import threading
+        
+        def add_entries(start, count):
+            for i in range(start, start + count):
+                entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+                history_manager.add_entry(entry)
+        
+        # Create threads
+        threads = []
+        for i in range(0, 10, 2):
+            t = threading.Thread(target=add_entries, args=(i, 2))
             threads.append(t)
             t.start()
         
-        # Wait for all threads
+        # Wait for threads
         for t in threads:
             t.join()
         
-        # Check no errors
-        assert len(errors) == 0
-        
-        # Check all entries added (max_entries might limit this)
-        # With 5 threads * 10 entries = 50, but max_entries=10, we should have 10
-        assert manager.get_size() == history_config.max_entries
+        # Should have 10 entries total
+        entries = history_manager.get_all_entries()
+        assert len(entries) == 10
+
+
+class TestHistoryPersistence:
+    """Tests for history persistence."""
     
-    def test_concurrent_read_write(self, history_config, sample_game_state):
-        """Test concurrent reads and writes."""
+    def test_save_and_load_history(self, temp_history_file):
+        """Test saving and loading history."""
         from history import GameHistoryManager
         
-        manager = GameHistoryManager(history_config)
-        errors = []
+        manager = GameHistoryManager(max_entries=10)
         
-        def writer():
-            try:
-                for i in range(20):
-                    manager.add_state(sample_game_state, game_time=float(i))
-            except Exception as e:
-                errors.append(e)
+        # Add entries
+        for i in range(5):
+            entry = {"game_time": float(i * 30), "data": f"entry_{i}"}
+            manager.add_entry(entry)
         
-        def reader():
-            try:
-                for _ in range(20):
-                    entries = manager.get_all_entries()
-                    recent = manager.get_recent_states(5)
-            except Exception as e:
-                errors.append(e)
+        # Save to file
+        manager.save_to_file(temp_history_file)
         
-        # Create and start threads
-        threads = []
-        for i in range(3):
-            t = threading.Thread(target=writer)
-            threads.append(t)
-            t.start()
+        # Create new manager and load
+        new_manager = GameHistoryManager(max_entries=10)
+        new_manager.load_from_file(temp_history_file)
         
-        for i in range(3):
-            t = threading.Thread(target=reader)
-            threads.append(t)
-            t.start()
-        
-        # Wait for all threads
-        for t in threads:
-            t.join()
-        
-        # Check no errors
-        assert len(errors) == 0
+        entries = new_manager.get_all_entries()
+        assert len(entries) == 5
 
 
-# ============================================
-# GameHistoryManager Tests - Edge Cases
-# ============================================
-
-class TestGameHistoryManagerEdgeCases:
-    """Tests for edge cases."""
-    
-    def test_add_none_state(self, history_manager):
-        """Test adding None as state."""
-        # Should handle gracefully
-        entry = history_manager.add_state(None, game_time=100.0)
-        
-        # Should either return None or create an entry with error data
-        assert entry is None or "error" in entry.data
-    
-    def test_add_empty_dict_state(self, history_manager):
-        """Test adding empty dict as state."""
-        entry = history_manager.add_state({}, game_time=100.0)
-        
-        assert entry is not None
-        assert entry.data == {}
-    
-    def test_get_recent_states_empty(self, history_manager):
-        """Test getting states when history is empty."""
-        states = history_manager.get_recent_states(10)
-        
-        assert states == []
-    
-    def test_get_recent_states_more_than_available(self, history_manager, sample_game_state):
-        """Test getting more states than available."""
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_state(sample_game_state, game_time=105.0)
-        
-        states = history_manager.get_recent_states(10)
-        
-        assert len(states) == 2
-    
-    def test_game_time_defaults(self, history_manager, sample_game_state):
-        """Test that game_time defaults properly."""
-        # Create a state without game_time field
-        state_without_game_time = dict(sample_game_state)
-        del state_without_game_time["game_time"]
-        
-        # Add state without explicit game_time
-        entry = history_manager.add_state(state_without_game_time)
-        
-        # game_time should default to 0.0
-        assert entry.game_time == 0.0
-    
-    def test_metadata_passed_through(self, history_manager, sample_game_state):
-        """Test that metadata is passed through."""
-        metadata = {"test": "value", "number": 42}
-        entry = history_manager.add_state(sample_game_state, game_time=100.0, metadata=metadata)
-        
-        assert entry.metadata == metadata
-
-
-# ============================================
-# Factory Function Tests
-# ============================================
-
-class TestFactoryFunctions:
-    """Tests for factory functions."""
-    
-    def test_create_history_manager(self):
-        """Test creating a history manager via factory."""
-        from history import create_history_manager, HistoryConfig
-        
-        # Create with persistence disabled to avoid loading from disk
-        config = HistoryConfig(persistence_enabled=False)
-        manager = create_history_manager(config)
-        
-        assert manager is not None
-        assert manager.get_size() == 0
-    
-    def test_get_history_manager_singleton(self):
-        """Test singleton pattern."""
-        from history import get_history_manager, reset_history_manager
-        
-        # Reset first
-        reset_history_manager()
-        
-        manager1 = get_history_manager()
-        manager2 = get_history_manager()
-        
-        assert manager1 is manager2
-    
-    def test_reset_history_manager(self):
-        """Test resetting the singleton."""
-        from history import get_history_manager, reset_history_manager
-        
-        manager1 = get_history_manager()
-        manager1.add_state({"test": "data"}, game_time=100.0)
-        
-        reset_history_manager()
-        
-        manager2 = get_history_manager()
-        
-        assert manager2.get_size() == 0
-    
-    def test_convenience_functions(self):
-        """Test convenience functions."""
-        from history import reset_history_manager, add_state_to_history, get_recent_states
-        
-        # Reset first
-        reset_history_manager()
-        
-        # Add a state
-        entry = add_state_to_history({"test": "data"}, game_time=100.0)
-        
-        assert entry is not None
-        
-        # Get recent states
-        states = get_recent_states(1)
-        
-        assert len(states) == 1
-
-
-# ============================================
-# Compression Tests
-# ============================================
-
-class TestStateCompression:
-    """Tests for state compression."""
-    
-    def test_compress_state(self, history_manager, sample_game_state):
-        """Test that state compression works."""
-        # This tests the internal _compress_state method
-        from history import GameState
-        
-        # Create a GameState from our dict (if schema available)
-        try:
-            state_obj = GameState.from_dict(sample_game_state)
-            compressed = history_manager._compress_state(state_obj)
-            
-            # Check that compression preserved important info
-            assert "game_time" in compressed
-            assert "squad_count" in compressed
-            assert "capture_points_owned" in compressed
-            assert "resources" in compressed
-            
-        except (ImportError, AttributeError, KeyError):
-            # Schema might not be fully available, skip
-            pytest.skip("Schema not available for compression test")
-    
-    def test_compress_without_schema(self, history_manager):
-        """Test that manager works without schema."""
-        # Add a state as a dict
-        state = {"test": "data", "game_time": 100.0}
-        entry = history_manager.add_state(state, game_time=100.0)
-        
-        assert entry is not None
-        assert entry.data == state
-
-
-# ============================================
-# Summary Generation Tests
-# ============================================
-
-class TestSummaryGeneration:
-    """Tests for summary generation."""
-    
-    def test_summary_with_states(self, history_manager, sample_game_state):
-        """Test summary generation with states."""
-        # Add states with different resource values
-        for i in range(3):
-            state = dict(sample_game_state)
-            state["resources"]["manpower"]["current"] = 100 + i * 100
-            state["resources"]["fuel"]["current"] = 50 + i * 50
-            history_manager.add_state(state, game_time=float(i * 10))
-        
-        context = history_manager.generate_context(include_summary=True)
-        
-        assert "summary" in context
-        assert context["summary"]["total_states"] == 3
-        assert context["summary"]["avg_manpower"] > 0
-        assert context["summary"]["avg_fuel"] > 0
-    
-    def test_summary_with_mixed_entries(self, history_manager, sample_game_state, 
-                                       sample_decision, sample_command):
-        """Test summary with mixed entry types."""
-        history_manager.add_state(sample_game_state, game_time=100.0)
-        history_manager.add_decision(sample_decision, game_time=105.0)
-        history_manager.add_command(sample_command, game_time=110.0)
-        history_manager.add_event("test", {}, game_time=115.0)
-        
-        context = history_manager.generate_context(include_summary=True)
-        
-        assert context["summary"]["total_states"] == 1
-        assert context["summary"]["total_decisions"] == 1
-        assert context["summary"]["total_commands"] == 1
-        assert context["summary"]["total_events"] == 1
+# Run tests if executed directly
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

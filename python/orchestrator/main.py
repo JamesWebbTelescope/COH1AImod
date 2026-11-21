@@ -38,6 +38,7 @@ from logger import StateLogger
 from orchestrator.scheduler import StrategicTickScheduler, FastTickScheduler, SchedulerManager
 from orchestrator.state_manager import StateManager
 from orchestrator.command_processor import CommandProcessor
+from orchestrator.strategist import Strategist, StrategistConfig, create_strategist
 
 
 class OrchestratorService:
@@ -91,10 +92,17 @@ class OrchestratorService:
             self.safety_filter
         )
         
+        # Initialize strategist (Phase 3)
+        self.strategist = self._init_strategist()
+        
         # Initialize schedulers
         self.scheduler_manager = SchedulerManager()
+        
+        # Get strategist config for tick interval
+        strategic_interval = self.config.get("strategist", "tick_interval", 10.0)
+        
         self.strategic_scheduler = StrategicTickScheduler(
-            interval=10.0,  # 10 seconds between strategic decisions
+            interval=strategic_interval,  # Seconds between strategic decisions (configurable)
             callback=self._on_strategic_tick
         )
         self.fast_scheduler = FastTickScheduler(
@@ -109,6 +117,56 @@ class OrchestratorService:
             self.logger.info("Running in TEST mode")
         if debug_mode:
             self.logger.info("Running in DEBUG mode")
+    
+    def _init_strategist(self):
+        """
+        Initialize the strategist component (Phase 3).
+        
+        Returns:
+            Strategist instance or None if initialization fails
+        """
+        try:
+            # Get mistral configuration
+            enabled = self.config.get("mistral", "enabled", True)
+            
+            if not enabled:
+                self.logger.info("Strategist disabled in configuration (mistral.enabled=False)")
+                return None
+            
+            # Get strategist-specific configuration
+            # Create strategist config
+            strategist_config = StrategistConfig(
+                enabled=enabled,
+                model=self.config.get("mistral", "model", "mistral-small-latest"),
+                temperature=self.config.get("mistral", "temperature", 0.7),
+                max_tokens=self.config.get("mistral", "max_tokens", 2048),
+                json_mode=self.config.get("mistral", "json_mode", True),
+                include_history=self.config.get("strategist", "include_history", True),
+                history_depth=self.config.get("strategist", "history_depth", 5),
+                max_intents_per_cycle=self.config.get("strategist", "max_intents_per_cycle", 5),
+                min_confidence=self.config.get("strategist", "min_confidence", 0.5),
+                min_priority=self.config.get("strategist", "min_priority", 1),
+                fallback_on_error=self.config.get("strategist", "fallback_on_error", True),
+                fallback_on_rate_limit=self.config.get("strategist", "fallback_on_rate_limit", True),
+                log_intents=self.config.get("strategist", "log_intents", True),
+                log_responses=self.config.get("strategist", "log_responses", False)
+            )
+            
+            # Create strategist
+            strategist = create_strategist(
+                config=strategist_config,
+                state_manager=self.state_manager,
+                command_processor=self.command_processor
+            )
+            
+            self.logger.info("Strategist (Phase 3) initialized - Mistral AI integration active")
+            return strategist
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize strategist: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return None
     
     def start(self):
         """Start the orchestrator service."""
@@ -132,6 +190,12 @@ class OrchestratorService:
         if not self.command_processor.start():
             self.logger.error("Failed to start command processor")
             return False
+        
+        # Start strategist (Phase 3)
+        if self.strategist:
+            if not self.strategist.start():
+                self.logger.warning("Failed to start strategist - falling back to reflex-only mode")
+                self.strategist = None
         
         self.running = True
         
@@ -159,6 +223,11 @@ class OrchestratorService:
         
         # Stop schedulers
         self.scheduler_manager.stop_all()
+        
+        # Stop strategist (Phase 3)
+        if self.strategist:
+            if not self.strategist.stop():
+                self.logger.warning("Strategist did not stop gracefully")
         
         # Stop command processor
         if not self.command_processor.stop():
@@ -246,6 +315,11 @@ class OrchestratorService:
             # Update command processor with current game state for safety filtering
             self.command_processor.update_game_state(state)
             
+            # Phase 3: Update strategist with current state
+            if self.strategist:
+                # Strategist will get state from state_manager when it runs
+                pass
+            
             # Log state summary
             if "player_id" in message.data:
                 self.logger.info(f"State update from player {message.data['player_id']}")
@@ -269,15 +343,27 @@ class OrchestratorService:
     def _on_strategic_tick(self):
         """Callback for strategic tick scheduler."""
         self.logger.info("Strategic tick - Time to make macro decisions")
-        # In Phase 1, we just log this event
-        # In Phase 2+, this will trigger strategist decisions
         
-        # For now, in test mode, generate a sample strategic command
-        if self.test_mode:
-            from orchestrator.command_processor import create_build_command
-            cmd = create_build_command(1, "barracks", [200, 200, 0])
-            self.command_processor.add_command(cmd)
-            self.logger.debug("Added test strategic build command")
+        # Phase 3: Use strategist for AI decisions
+        if self.strategist:
+            try:
+                success = self.strategist.run_cycle()
+                if success:
+                    self.logger.info("Strategist cycle completed successfully")
+                else:
+                    self.logger.debug("Strategist cycle completed (no actions or in fallback mode)")
+            except Exception as e:
+                self.logger.error(f"Strategist error: {e}")
+        else:
+            # Fallback: In test mode, generate a sample strategic command
+            if self.test_mode:
+                from orchestrator.command_processor import create_build_command
+                cmd = create_build_command(1, "barracks", [200, 200, 0])
+                self.command_processor.add_command(cmd)
+                self.logger.debug("Added test strategic build command (fallback mode)")
+        
+        # In Phase 1-2, we just log this event
+        # In Phase 3+, strategist handles decisions
         
     def _on_fast_tick(self):
         """Callback for fast tick scheduler."""

@@ -46,7 +46,21 @@ DEFAULT_CONFIG = {
         "api_key": "",
         "temperature": 0.7,
         "max_tokens": 2048,
-        "json_mode": True
+        "json_mode": True,
+        "enabled": True
+    },
+    "strategist": {
+        "enabled": True,
+        "tick_interval": 10.0,
+        "max_intents_per_cycle": 5,
+        "min_confidence": 0.5,
+        "min_priority": 1,
+        "include_history": True,
+        "history_depth": 5,
+        "fallback_on_error": True,
+        "fallback_on_rate_limit": True,
+        "log_intents": True,
+        "log_responses": False
     },
     "reflex": {
         "enabled": True,
