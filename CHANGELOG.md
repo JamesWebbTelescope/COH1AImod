@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- **SCAR Main Module** (`scar/main.scar`) - Fixed log message formatting for runtime display
+
 ### Added
 - **Complete Phase 0 Testing Plan** (`TEST_PLAN.md`) - Comprehensive testing plan expanded from Steps 1-2 to full Phase 0 validation
   - Added Tests 3-7: File I/O, IPC round-trip, Latency verification, Fallback IPC, Command execution

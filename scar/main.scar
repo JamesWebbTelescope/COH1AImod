@@ -125,7 +125,7 @@ function OnGameUpdate(deltaTime)
         lastUpdateTime = currentTime
         
         local ipcUpdated = UpdateIPC(deltaTime)
-        Log("Runtime:" lastUpdateTime)
+        Log("Runtime: " .. lastUpdateTime)
         
         if (ipcUpdated) {
             -- IPC activity occurred
