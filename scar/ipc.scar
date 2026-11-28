@@ -218,9 +218,11 @@ function WriteGameState(state)
     
     ReleaseLock()
     
-    if (success) {
+    if (success) then
         Log("State written to " .. IPC_STATE_FILE .. " (" .. #jsonData .. " bytes)")
-    }
+    else
+        Log("WARNING: State write failed - file may not be updated")
+    end
     
     return success
 }
@@ -293,6 +295,11 @@ function ReadCommands()
     -- Clear the command file after reading
     DeleteFile(IPC_COMMAND_FILE)
     
+    -- Debug: Log command activity
+    if (DEBUG_ENABLED and DEBUG_SHOW_IPC) then
+        Log(string.format("IPC: Read %d commands from file", #commands))
+    end
+    
     return commands
 }
 
@@ -363,6 +370,13 @@ function UpdateIPC(deltaTime)
 function InitializeIPC()
 {
     Log("Initializing IPC system")
+    
+    -- Debug: Show IPC status
+    if (DEBUG_ENABLED and DEBUG_SHOW_IPC) then
+        Log("IPC: File polling enabled")
+        Log(string.format("IPC files: state=%s, commands=%s, lock=%s", 
+            IPC_STATE_FILE, IPC_COMMAND_FILE, IPC_LOCK_FILE))
+    end
     
     -- Initialize command executor
     if (!InitializeCommandExecutor()) then

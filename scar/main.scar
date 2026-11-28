@@ -67,6 +67,10 @@ local stats = {
     last_command_time = 0
 }
 
+-- Debug: Track mod activity
+local lastActivityTime = 0
+local activityCounter = 0
+
 // ============================================
 // Initialization
 // ============================================
@@ -103,6 +107,13 @@ function InitializeMod()
     modInitialized = true
     Log("Initialization COMPLETE")
     Log("Mod is now active")
+    Log("==============================")
+    Log("CoH1 Mistral AI Mod is running!")
+    Log("Press ` in COH to open developer console")
+    Log("Type 'mod_stats' for command statistics")
+    Log("Type 'mod_state' for state collection info")
+    Log("Type 'mod_ipc' for IPC communication status")
+    Log("==============================")
     
     return true
 }
@@ -138,6 +149,17 @@ function OnGameUpdate(deltaTime)
     
     -- Additional mod logic can go here
     UpdateReflexLayer(deltaTime)
+    
+    -- Periodic debug status (every 5 seconds)
+    if (inDebugMode) then
+        activityCounter = activityCounter + 1
+        if (activityCounter >= 50) then  -- ~5 seconds at 0.1s intervals
+            activityCounter = 0
+            local uptime = math.floor((GetTimestamp() - lastActivityTime) / 10)
+            Log(string.format("Mod active: %d states collected, %d commands processed", 
+                stats.states_collected, stats.commands_processed))
+        end
+    end
 }
 
 // ============================================

@@ -764,13 +764,26 @@ function InitializeStateCollector()
 {
     Log("Initializing state collector")
     
-    // Test data collection
+    -- Debug: Show collection info
+    if (DEBUG_ENABLED) then
+        Log("State collector will collect: resources, squads, CPs, enemies, tech, build queue, population, game phase")
+    end
+    
+    -- Test data collection
     local testState = CollectGameState()
     
-    if (testState == null || testState == {}) {
+    if (testState == null || testState == {}) then
         Log("WARNING: State collection returned empty data")
         return false
-    }
+    end
+    
+    -- Debug: Log collected data summary
+    if (DEBUG_ENABLED) then
+        -- Debug: Log collection activity
+            if (DEBUG_ENABLED) then
+                Log(string.format("State collected: %d squads, %d CPs, %d enemies", 
+            #testState.squads, #testState.cps, #testState.enemies))
+    end
     
     Log("State collector initialized successfully")
     return true
@@ -795,7 +808,9 @@ function UpdateStateCollector(deltaTime)
         // For now, just collect and validate
         if (state ~= null) {
             // Log summary
-            Log(string.format("State collected: %d squads, %d CPs, %d enemies",
+            -- Debug: Log collection activity
+            if (DEBUG_ENABLED) then
+                Log(string.format("State collected: %d squads, %d CPs, %d enemies",
                 #state.squads, #state.cps, #state.enemies))
         }
         

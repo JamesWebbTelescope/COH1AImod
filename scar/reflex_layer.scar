@@ -119,7 +119,15 @@ function InitializeReflexLayer()
     reflexBuildQueueEnabled = true
     
     Log("Reflex Layer initialized successfully")
-    return true
+    
+    -- Debug: Show reflex status
+    if (DEBUG_ENABLED) then
+        Log("Reflex behaviors active:")
+        Log(string.format("  Retreat: %s", reflexRetreatEnabled and "ENABLED" or "DISABLED"))
+        Log(string.format("  Artillery response: %s", reflexArtilleryResponseEnabled and "ENABLED" or "DISABLED"))
+        Log(string.format("  Capture micro: %s", reflexCaptureMicroEnabled and "ENABLED" or "DISABLED"))
+        Log(string.format("  Build queue: %s", reflexBuildQueueEnabled and "ENABLED" or "DISABLED"))
+    end
 }
 
 -- ============================================
@@ -266,6 +274,11 @@ function ProcessCriticalRetreats(squads)
     
     if (urgentRetreats > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
         Log(string.format("Reflex: %d urgent retreats executed (low health + under fire)", urgentRetreats))
+    end
+    
+    -- Debug: Log critical retreats at info level
+    if (criticalRetreats > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: Critical retreat details - health percent <= %.1f under fire check", CRITICAL_HEALTH_THRESHOLD))
     end
 }
 
@@ -559,6 +572,11 @@ function ProcessArtilleryResponse(squads)
             squadsMoved, #artilleryPositions))
     end
     
+    -- Debug: Log artillery details
+    if (artilleryResponses > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: Artillery response details - distance threshold: %.1f", ARTILLERY_RESPONSE_DISTANCE))
+    end
+    
     reflexStats.artillery_responses = reflexStats.artillery_responses + artilleryResponses
 }
 
@@ -765,6 +783,11 @@ function ProcessCapturePointMicro(player, squads)
     
     if (cpsDefended > 0 and ShouldLog(DEBUG_LEVEL_INFO)) then
         Log(string.format("Reflex: Defended %d contested capture points", cpsDefended))
+    end
+    
+    -- Debug: Log capture details
+    if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: Capture micro - %d total CPs processed", #capturePoints))
     end
 }
 
@@ -1131,6 +1154,11 @@ function ProcessBuildQueueManagement(player, buildings, resources)
     
     if (queuesFilled > 0 and ShouldLog(DEBUG_LEVEL_DEBUG)) then
         Log(string.format("Reflex: Filled %d empty/inadequate build queues", queuesFilled))
+    end
+    
+    -- Debug: Log build queue details
+    if (ShouldLog(DEBUG_LEVEL_DEBUG)) then
+        Log(string.format("Reflex: Build queue check - %d buildings evaluated", #buildings))
     end
 }
 

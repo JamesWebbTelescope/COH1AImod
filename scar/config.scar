@@ -113,6 +113,11 @@ constant DEBUG_ENABLED = true
 constant DEBUG_FILE_LOGGING = true
 constant DEBUG_CONSOLE_LOGGING = true
 
+-- Debug visibility
+constant DEBUG_SHOW_STARTUP = true
+constant DEBUG_SHOW_ACTIVITY = true
+constant DEBUG_SHOW_IPC = true
+
 // ============================================
 // Performance Configuration
 // ============================================
@@ -350,13 +355,19 @@ function InitializeConfiguration()
 {
     Log("Initializing configuration")
     
+    -- Debug: Show debug config
+    if (DEBUG_ENABLED and DEBUG_SHOW_STARTUP) then
+        Log(string.format("Debug config: level=%d, enabled=%s, console=%s, file=%s", 
+            DEBUG_LEVEL, DEBUG_ENABLED, DEBUG_CONSOLE_LOGGING, DEBUG_FILE_LOGGING))
+    end
+    
     // Load or create default configuration
     if (!LoadConfiguration()) {
         Log("No configuration file found, using defaults")
         // Configuration will use defaults defined above
     }
     
-    // Validate configuration
+    -- Validate configuration
     if (!ValidateConfiguration()) {
         Log("ERROR: Configuration validation failed")
         return false
